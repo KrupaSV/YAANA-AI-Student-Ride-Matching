@@ -206,8 +206,64 @@ export default function ExploreBoard() {
 
   const findTo = session ? "/find-rides" : "/login";
   const createTo = session ? "/create-trip" : "/register";
-  const showResults = canReadTrips && !loading && !error;
-  const gated = !authLoading && (!session || !verified);
+  const signedOut = !authLoading && (!session || !verified);
+  const ready = canReadTrips && !loading && !error;
+
+  function renderRail() {
+    if (authLoading || loading) return <Skeleton rows={3} />;
+    if (error) return <p className="alert alert-error" role="alert">{error}</p>;
+    if (signedOut) {
+      return (
+        <EmptyState
+          eyebrow="Explore"
+          title="Sign in to load published trips."
+          body="Nothing here is invented to fill the map."
+          to="/login"
+          action="Log in to explore"
+        />
+      );
+    }
+    if (ready && trips.length === 0) {
+      return (
+        <EmptyState
+          eyebrow="Explore"
+          title="No published trips to show."
+          body="Nothing here is invented to fill the map."
+        />
+      );
+    }
+    if (ready && filtered.length === 0) {
+      return (
+        <EmptyState
+          eyebrow="Explore"
+          title="No rides match these filters."
+          body="Try another destination, time window, or transport mode."
+        />
+      );
+    }
+    return (
+      <ul className="explore-hits">
+        {filtered.map((trip) => (
+          <li key={trip.id}>
+            <button
+              type="button"
+              className={`explore-hit${selected?.id === trip.id ? " is-selected" : ""}`}
+              aria-pressed={selected?.id === trip.id}
+              onClick={() => setSelectedId(trip.id)}
+            >
+              <span className="explore-hit-seats">{openSeats(trip)}</span>
+              <strong>{trip.origin_name} → {trip.destination_name}</strong>
+              <p>
+                {fmtDate(trip.departure_at)}
+                {" · "}
+                {trip.transport_mode || "Mode unset"}
+              </p>
+            </button>
+          </li>
+        ))}
+      </ul>
+    );
+  }
 
   return (
     <div className="explore-studio">
@@ -308,56 +364,7 @@ export default function ExploreBoard() {
           </form>
 
           <div className="explore-rail">
-            {authLoading || loading ? (
-              <Skeleton rows={3} />
-            ) : error ? (
-              <p className="alert alert-error" role="alert">{error}</p>
-            ) : gated ? (
-              <EmptyState
-                eyebrow="Explore"
-                title="Sign in to load published trips."
-                body="Nothing here is invented to fill the map."
-                to="/login"
-                action="Log in to explore"
-              />
-            ) : showResults && trips.length === 0 ? (
-              <EmptyState
-                eyebrow="Explore"
-                title="No rides available yet. Be the first to publish a trip!"
-                body="When a student publishes an open trip, it will show up here."
-                to={createTo}
-                action="Create a trip"
-              />
-            ) : showResults && filtered.length === 0 ? (
-              <EmptyState
-                eyebrow="Explore"
-                title="No rides match these filters."
-                body="Try another destination, time window, or transport mode."
-                to={createTo}
-                action="Create a trip"
-              />
-            ) : (
-              <ul className="explore-hits">
-                {filtered.map((trip) => (
-                  <li key={trip.id}>
-                    <button
-                      type="button"
-                      className={`explore-hit${selected?.id === trip.id ? " is-selected" : ""}`}
-                      aria-pressed={selected?.id === trip.id}
-                      onClick={() => setSelectedId(trip.id)}
-                    >
-                      <span className="explore-hit-seats">{openSeats(trip)}</span>
-                      <strong>{trip.origin_name} → {trip.destination_name}</strong>
-                      <p>
-                        {fmtDate(trip.departure_at)}
-                        {" · "}
-                        {trip.transport_mode || "Mode unset"}
-                      </p>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            {renderRail()}
           </div>
         </div>
       </div>

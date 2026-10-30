@@ -839,7 +839,8 @@ html[data-motion="reduced"] .how-step .how-step-icon {
   grid-template-columns: minmax(260px, 0.96fr) minmax(0, 1.04fr);
   gap: 28px;
   align-items: center;
-  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
   border: 3px solid #071B2D;
   border-radius: 28px;
   background: #168ED0 url("/explore-pocket.jpg") center / cover no-repeat;
@@ -1022,6 +1023,10 @@ html[data-motion="reduced"] .how-step .how-step-icon {
   overflow: auto;
   padding-right: 4px;
 }
+.explore-rail:has(.empty) {
+  max-height: none;
+  overflow: visible;
+}
 .explore-hits {
   display: grid;
   margin: 0;
@@ -1061,11 +1066,33 @@ html[data-motion="reduced"] .how-step .how-step-icon {
 .explore-hit.is-selected { border-color: var(--green); background: #eef6f0; }
 .explore-cta { display: flex; flex-wrap: wrap; gap: 12px; }
 .explore-rail .empty {
+  display: grid;
   margin: 0;
   padding: 8px 0 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
   border: 0;
   min-height: 0;
   background: transparent;
+}
+.explore-rail .empty-icon {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+}
+.explore-rail .empty h2 {
+  font-size: 1.35rem;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.explore-rail .empty p {
+  max-width: none;
+}
+.explore-rail .empty .btn {
+  width: auto;
+  max-width: 100%;
+  min-height: 44px;
 }
 .section-shell { padding: clamp(64px, 8vw, 104px) clamp(20px, 6vw, 72px); }
 .section-intro { max-width: 620px; margin-bottom: 36px; }
@@ -2283,7 +2310,11 @@ html[data-motion="reduced"] *::after {
   .page-actions { width: 100%; }
   .page-actions .btn { width: 100%; }
   .explore-tricks { grid-template-columns: 1fr 1fr; }
-  .explore-pocket { grid-template-columns: 1fr; }
+  .explore-pocket {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    overflow-x: clip;
+  }
   .explore-map-stage {
     width: min(100%, 480px);
     max-width: 480px;
@@ -2343,6 +2374,19 @@ html[data-motion="reduced"] *::after {
   .route-copy > span { width: 1px; height: 18px; margin-left: 4px; }
   .route-copy > span::after { right: -3px; top: auto; bottom: 0; }
   .empty { grid-template-columns: 1fr; }
+  .explore-rail .empty {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+  }
+  .explore-pocket {
+    padding: 16px 12px 18px;
+  }
+  .explore-side {
+    padding: 14px;
+  }
+  .explore-cta {
+    flex-wrap: wrap;
+  }
   .map-frame .leaflet-container { height: clamp(220px, 58vw, 340px); min-height: 220px; }
   .travel-map.is-compact .leaflet-container { height: 220px; min-height: 220px; }
   .explore-map .leaflet-container,
@@ -2391,6 +2435,9 @@ html[data-motion="reduced"] *::after {
   .pair { flex-direction: column; align-items: stretch; }
   .pair > .field { flex-basis: auto; }
   .trip-card .row .btn, .empty .btn { width: 100%; }
+  .explore-rail .empty .btn { width: auto; max-width: 100%; }
+  .explore-cta { flex-direction: column; align-items: stretch; }
+  .explore-cta .btn { width: 100%; }
   .sidebar { width: min(100%, 320px); }
   .setting-row { grid-template-columns: 1fr; justify-items: start; gap: 8px; }
 }
