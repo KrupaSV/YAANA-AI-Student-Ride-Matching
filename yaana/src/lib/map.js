@@ -1,7 +1,7 @@
 import { fetchRoute } from "./api";
 import { simplifyRoute } from "./matching";
 
-export const DEFAULT_CENTER = [41.8781, -87.6298];
+export const DEFAULT_CENTER = [12.89, 77.64];
 export const DEFAULT_ZOOM = 12;
 
 export const EXAMPLE_PICKUP = {

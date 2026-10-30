@@ -8,7 +8,6 @@ import Skeleton from "./Skeleton";
 import { useAuth } from "../lib/auth";
 import { supabase, friendlyError, fmtDate } from "../lib/supabase";
 import { haversineKm, openSeats, TRANSPORT_MODES } from "../lib/matching";
-import { mergeDemoTrips } from "../lib/demo";
 
 const emptyDraft = {
   pickup: null,
@@ -65,6 +64,24 @@ function usesPlace(place, query) {
   return !typed || typed === place.label;
 }
 
+function isChicagoCoordinate(lat, lng) {
+  const latitude = Number(lat);
+  const longitude = Number(lng);
+  return latitude >= 41.6 && latitude <= 42.1 && longitude >= -88.0 && longitude <= -87.5;
+}
+
+function isAvailableStudentTrip(trip) {
+  if (!trip?.id) return false;
+  if (trip.is_chicago || trip.is_demo) return false;
+  if (String(trip.id).startsWith("chi-")) return false;
+  if (trip.status !== "open") return false;
+  if (isChicagoCoordinate(trip.origin_lat, trip.origin_lng)) return false;
+  if (isChicagoCoordinate(trip.destination_lat, trip.destination_lng)) return false;
+  const departure = new Date(trip.departure_at).getTime();
+  if (!Number.isFinite(departure) || departure <= Date.now()) return false;
+  return openSeats(trip) > 0;
+}
+
 function filterTrips(trips, filters) {
   const pickupText = (filters.pickupQuery || filters.pickup?.label || "").trim().toLowerCase();
   const destText = (filters.destQuery || filters.destination?.label || "").trim().toLowerCase();
@@ -107,7 +124,7 @@ function filterTrips(trips, filters) {
 }
 
 export default function ExploreBoard() {
-  const { session, user, profile, verified, loading: authLoading, configured } = useAuth();
+  const { session, verified, loading: authLoading, configured } = useAuth();
   const [trips, setTrips] = useState([]);
   const [draft, setDraft] = useState(emptyDraft);
   const [selectedId, setSelectedId] = useState("");
@@ -134,18 +151,18 @@ export default function ExploreBoard() {
     const { data, error: queryError } = await supabase
       .from("trips")
       .select("*")
-      .in("status", ["open", "full"])
+      .eq("status", "open")
       .gt("departure_at", new Date().toISOString())
       .order("departure_at", { ascending: true })
       .limit(100);
     if (queryError) {
       setError(friendlyError(queryError));
-      setTrips(mergeDemoTrips([], user?.id, profile?.full_name));
+      setTrips([]);
     } else {
-      setTrips(mergeDemoTrips(data || [], user?.id, profile?.full_name));
+      setTrips((data || []).filter(isAvailableStudentTrip));
     }
     setLoading(false);
-  }, [configured, session, verified, user?.id, profile?.full_name]);
+  }, [configured, session, verified]);
 
   useEffect(() => {
     if (authLoading) return undefined;
@@ -175,7 +192,7 @@ export default function ExploreBoard() {
 
   const mapSource = selected
     ? filtered.filter((trip) => haversineKm([trip.origin_lat, trip.origin_lng], [selected.origin_lat, selected.origin_lng]) < 30)
-    : (filtered.some((trip) => trip.is_chicago) ? filtered.filter((trip) => trip.is_chicago) : filtered);
+    : filtered;
   const listings = mapSource.slice(0, 80).map((trip) => ({
     id: trip.id,
     lat: trip.origin_lat,
@@ -213,6 +230,7 @@ export default function ExploreBoard() {
             <TravelMap
               compact
               quiet
+              preview={false}
               origin={selected ? [selected.origin_lat, selected.origin_lng] : null}
               destination={selected ? [selected.destination_lat, selected.destination_lng] : null}
               route={selected?.route_geometry || []}
@@ -224,6 +242,7 @@ export default function ExploreBoard() {
               selected={Boolean(selected)}
               listings={listings}
               onSelectListing={setSelectedId}
+              emptyHint="Published student trips appear here when they are open."
             />
           </div>
         </div>
@@ -301,11 +320,19 @@ export default function ExploreBoard() {
                 to="/login"
                 action="Log in to explore"
               />
+            ) : showResults && trips.length === 0 ? (
+              <EmptyState
+                eyebrow="Explore"
+                title="No rides available yet. Be the first to publish a trip!"
+                body="When a student publishes an open trip, it will show up here."
+                to={createTo}
+                action="Create a trip"
+              />
             ) : showResults && filtered.length === 0 ? (
               <EmptyState
                 eyebrow="Explore"
-                title="No rides on this route just yet."
-                body="Be the first to post a journey, or try another destination."
+                title="No rides match these filters."
+                body="Try another destination, time window, or transport mode."
                 to={createTo}
                 action="Create a trip"
               />
