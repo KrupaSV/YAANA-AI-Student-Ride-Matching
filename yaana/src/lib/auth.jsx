@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { configuredDomains } from "./validation";
+import { registrationMode as envRegistrationMode } from "./registrationMode";
 import { supabase } from "./supabase";
 
 const AuthContext = createContext(null);
@@ -43,6 +44,7 @@ export function AuthProvider({ children }) {
   const [schemaReady, setSchemaReady] = useState(true);
   const [schemaGap, setSchemaGap] = useState("");
   const [domains, setDomains] = useState(configuredDomains);
+  const [regMode, setRegMode] = useState(envRegistrationMode);
 
   const refreshProfile = useCallback(async (userId) => {
     const id = userId || user?.id;
@@ -158,6 +160,22 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    async function loadRegistrationMode() {
+      if (!supabase) return;
+      const { data, error } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", "registration_mode")
+        .maybeSingle();
+      if (!active || error || !data?.value) return;
+      setRegMode(envRegistrationMode(data.value));
+    }
+    loadRegistrationMode();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     document.documentElement.dataset.motion = profile?.reduced_motion ? "reduced" : "normal";
     document.documentElement.dataset.cards = profile?.compact_cards ? "compact" : "comfortable";
   }, [profile?.reduced_motion, profile?.compact_cards]);
@@ -170,6 +188,8 @@ export function AuthProvider({ children }) {
     schemaReady,
     schemaGap,
     domains,
+    registrationMode: regMode,
+    isTestingRegistration: regMode === "testing",
     configured: Boolean(supabase),
     confirmed: Boolean(user?.email_confirmed_at),
     verified: profile?.verification_status === "verified" && Boolean(user?.email_confirmed_at),
@@ -181,7 +201,7 @@ export function AuthProvider({ children }) {
       setUser(null);
       setProfile(null);
     },
-  }), [session, user, profile, loading, schemaReady, schemaGap, domains, refreshProfile]);
+  }), [session, user, profile, loading, schemaReady, schemaGap, domains, regMode, refreshProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

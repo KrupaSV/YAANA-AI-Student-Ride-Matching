@@ -136,7 +136,8 @@ export default function AppShell() {
           {schemaGap === "registration" && (
             <p className="alert alert-info" role="status">
               Registration testing mode needs yaana/supabase/migrations/20261030190000_registration_mode.sql
-              in the Supabase SQL editor. Run it once, then refresh. Existing student accounts stay in place.
+              and yaana/supabase/migrations/20261030210000_optional_usn.sql in the Supabase SQL editor.
+              Run them once, then refresh. Existing student accounts stay in place.
             </p>
           )}
           {confirmed && profile?.verification_status && profile.verification_status !== "verified" && (

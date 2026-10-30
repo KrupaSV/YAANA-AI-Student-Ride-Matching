@@ -2,14 +2,13 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase, friendlyError } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { authRedirectUrl, isTestingRegistration, validateLogin } from "../lib/validation";
+import { authRedirectUrl, validateLogin } from "../lib/validation";
 import AuthLayout from "../components/AuthLayout";
 import { useTitle } from "../lib/useTitle";
 
 export default function ForgotPassword() {
   useTitle("Forgot password");
-  const { domains, configured } = useAuth();
-  const testing = isTestingRegistration();
+  const { configured, isTestingRegistration: testing } = useAuth();
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
@@ -18,7 +17,7 @@ export default function ForgotPassword() {
   async function submit(event) {
     event.preventDefault();
     setError("");
-    const result = validateLogin({ email, password: "placeholder" }, domains);
+    const result = validateLogin({ email, password: "placeholder" });
     if (result.errors.email) {
       setError(result.errors.email);
       return;
@@ -52,8 +51,14 @@ export default function ForgotPassword() {
       {error && <p className="alert alert-error" role="alert">{error}</p>}
       <form className="form-grid" onSubmit={submit}>
         <label className="field">
-          <span>{testing ? "Email" : "College email"}</span>
-          <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+          <span>Email address</span>
+          <input
+            type="email"
+            value={email}
+            placeholder="Enter your email address"
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
         </label>
         <button className="btn btn-primary" disabled={busy}>{busy ? "Sending…" : "Send reset link"}</button>
       </form>

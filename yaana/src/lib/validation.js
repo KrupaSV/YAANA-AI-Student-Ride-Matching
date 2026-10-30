@@ -37,6 +37,19 @@ export function isAllowedCollegeEmail(value, domains = configuredDomains(), mode
   return domains.map((domain) => domain.toLowerCase()).includes(parts.domain);
 }
 
+export function emailFieldCopy(mode = registrationMode(), domains = configuredDomains()) {
+  if (mode === "testing") {
+    return {
+      label: "Email address",
+      placeholder: "Enter your email address",
+    };
+  }
+  return {
+    label: "DSU college email",
+    placeholder: `name@${domains[0] || "dsu.edu.in"}`,
+  };
+}
+
 function emailPolicyError(domains, mode = registrationMode()) {
   if (mode === "testing") return "Enter a valid email address.";
   return `Use an exact student address at ${domains.map((domain) => `@${domain}`).join(" or ")}. A matching domain is not enrollment verification.`;
@@ -53,8 +66,11 @@ export function validateName(value) {
   return "";
 }
 
-export function validateUsn(value) {
+export function validateUsn(value, { required = true } = {}) {
   const usn = String(value || "").trim().toUpperCase();
+  if (!usn) {
+    return required ? "Enter your USN using 5 to 20 letters or numbers." : "";
+  }
   if (!/^[A-Z0-9]{5,20}$/.test(usn)) {
     return "Enter your USN using 5 to 20 letters or numbers.";
   }
@@ -76,7 +92,7 @@ export function validateRegistration(input, domains = configuredDomains(), mode 
   const nameError = validateName(input.name);
   const emailError = isAllowedCollegeEmail(input.email, domains, mode) ? "" : emailPolicyError(domains, mode);
   const passwordError = validatePassword(input.password);
-  const usnError = validateUsn(input.usn);
+  const usnError = validateUsn(input.usn, { required: mode !== "testing" });
 
   if (nameError) errors.name = nameError;
   if (emailError) errors.email = emailError;
@@ -95,12 +111,10 @@ export function validateRegistration(input, domains = configuredDomains(), mode 
   };
 }
 
-export function validateLogin(input, domains = configuredDomains(), mode = registrationMode()) {
+export function validateLogin(input) {
   const errors = {};
-  if (!isAllowedCollegeEmail(input.email, domains, mode)) {
-    errors.email = mode === "testing"
-      ? "Enter a valid email address."
-      : `Use an exact student address at ${domains.map((domain) => `@${domain}`).join(" or ")}.`;
+  if (!isValidEmailAddress(input.email)) {
+    errors.email = "Enter a valid email address.";
   }
   if (!input.password) errors.password = "Enter your password.";
   return {

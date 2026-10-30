@@ -59,13 +59,17 @@ To allow another exact student domain later, insert it into `allowed_email_domai
 
 Signup still uses Supabase Auth and still requires the confirmation email. Row Level Security stays on. No passwords or inboxes are hardcoded.
 
-**Enable testing (any valid email):**
+**Enable testing (any valid email, including Gmail and Outlook; USN not required):**
 
 1. In `yaana/.env.local` set `VITE_REGISTRATION_MODE=testing` and restart `npm run dev`.
-2. In the Supabase SQL editor, run `yaana/supabase/migrations/20261030190000_registration_mode.sql` once. That file sets `public.app_settings.registration_mode` to `testing`.
+2. In the Supabase SQL editor, run these once:
+   - `yaana/supabase/migrations/20261030190000_registration_mode.sql`
+   - `yaana/supabase/migrations/20261030210000_optional_usn.sql`
 3. Keep Authentication → Providers → Email → Confirm email enabled.
+4. The live form also reads `public.app_settings.registration_mode`, so a deployed site follows the SQL switch without a rebuild.
+5. Register and login then show **Email address**. The USN field is hidden while testing.
 
-**Restore DSU-only registration:**
+**Restore DSU-only registration before public launch:**
 
 1. Set `VITE_REGISTRATION_MODE=production` in `yaana/.env.local` and restart the Vite process.
 2. In the SQL editor run:
@@ -76,7 +80,7 @@ set value = 'production', updated_at = now()
 where key = 'registration_mode';
 ```
 
-Existing DSU student accounts are not rewritten. After restore, personal-email test accounts can still exist in Auth, but they cannot publish trips or match because the domain check returns.
+Existing DSU student accounts and USNs are not rewritten. After restore, personal-email test accounts can still log in, but they cannot publish trips or match because the database domain check returns.
 
 ## How to test
 

@@ -8,15 +8,12 @@ import HowSteps from "../components/HowSteps";
 import ExploreBoard from "../components/ExploreBoard";
 import YaanaMarquee from "../components/YaanaMarquee";
 import { useAuth } from "../lib/auth";
-import { isTestingRegistration } from "../lib/validation";
 import { useTitle } from "../lib/useTitle";
 
 const faqs = [
   [
     "Who can join YAANA?",
-    isTestingRegistration()
-      ? "Temporary testing mode accepts any valid email. Opening the confirmation link is still required before matching. Production registration returns to approved college domains, beginning with @dsu.edu.in."
-      : "Registration currently accepts exact addresses from configured eligible domains, beginning with @dsu.edu.in. An allowed domain starts the process; it is not a university roster check. Matching stays closed until the confirmation link establishes a confirmed session.",
+    "Registration currently accepts exact addresses from configured eligible domains, beginning with @dsu.edu.in. An allowed domain starts the process; it is not a university roster check. Matching stays closed until the confirmation link establishes a confirmed session.",
     "🎓",
   ],
   [
@@ -59,7 +56,17 @@ const faqs = [
 export default function Landing() {
   useTitle("Your campus. Your route. Your people.");
   const reduce = useReducedMotion();
-  const { session } = useAuth();
+  const { session, isTestingRegistration: testing } = useAuth();
+  const faqItems = useMemo(() => faqs.map((item, index) => {
+    if (index !== 0) return item;
+    return [
+      item[0],
+      testing
+        ? "Temporary testing mode accepts any valid email, including Gmail and Outlook. A USN is not required. Opening the confirmation link is still required before matching. Production registration returns to approved college domains, beginning with @dsu.edu.in."
+        : item[1],
+      item[2],
+    ];
+  }), [testing]);
   const [open, setOpen] = useState(-1);
   const reveal = useMemo(() => (
     reduce ? {} : {
@@ -209,7 +216,7 @@ export default function Landing() {
             <p>Good questions. Clear answers. Fewer awkward first-ride moments.</p>
           </div>
           <div className="faq">
-            {faqs.map(([question, answer, emoji], index) => {
+            {faqItems.map(([question, answer, emoji], index) => {
               const expanded = open === index;
               const panelId = `faq-panel-${index}`;
               const buttonId = `faq-btn-${index}`;
@@ -260,7 +267,11 @@ export default function Landing() {
             <div>
               <p className="eyebrow">Ready when your route is</p>
               <h2>Same campus. Similar roads. Your people.</h2>
-              <p>Use your eligible college email. YAANA waits for the confirmation link before matching features open.</p>
+              <p>
+                {testing
+                  ? "Use any valid email while testing. A USN is not required. YAANA waits for the confirmation link before matching features open."
+                  : "Use your eligible college email. YAANA waits for the confirmation link before matching features open."}
+              </p>
             </div>
             <div className="closing-actions">
               <Link className="btn btn-primary" to="/register">Find your people <ArrowRight size={16} /></Link>

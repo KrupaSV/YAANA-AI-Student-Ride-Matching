@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  emailFieldCopy,
   isAllowedCollegeEmail,
   isValidEmailAddress,
   registrationMode,
@@ -30,6 +31,14 @@ test("production accepts DSU addresses and rejects personal mail", () => {
   assert.equal(isAllowedCollegeEmail("not-an-email", dsu, "production"), false);
 });
 
+test("testing email field copy uses a generic address label", () => {
+  const testing = emailFieldCopy("testing", dsu);
+  assert.equal(testing.label, "Email address");
+  assert.equal(testing.placeholder, "Enter your email address");
+  const production = emailFieldCopy("production", dsu);
+  assert.equal(production.label, "DSU college email");
+});
+
 test("testing accepts any valid email and still rejects malformed values", () => {
   assert.equal(isValidEmailAddress("tester@gmail.com"), true);
   assert.equal(isAllowedCollegeEmail("tester@gmail.com", dsu, "testing"), true);
@@ -47,9 +56,22 @@ test("registration validation follows the active mode", () => {
   assert.match(blocked.errors.email, /@dsu.edu.in/);
 });
 
-test("login validation follows the active mode", () => {
-  const testing = validateLogin({ email: "tester@gmail.com", password: "x" }, dsu, "testing");
-  assert.equal(testing.valid, true);
-  const production = validateLogin({ email: "tester@gmail.com", password: "x" }, dsu, "production");
+test("testing registration allows a Gmail address without a USN", () => {
+  const gmail = validateRegistration({ ...base, email: "mother@gmail.com", usn: "" }, dsu, "testing");
+  assert.equal(gmail.valid, true);
+  assert.equal(gmail.usn, "");
+  const production = validateRegistration({ ...base, email: "student@dsu.edu.in", usn: "" }, dsu, "production");
   assert.equal(production.valid, false);
+  assert.match(production.errors.usn, /USN/);
+});
+
+test("login validation accepts any valid email", () => {
+  const gmail = validateLogin({ email: "tester@gmail.com", password: "x" });
+  assert.equal(gmail.valid, true);
+  const outlook = validateLogin({ email: "tester@outlook.com", password: "x" });
+  assert.equal(outlook.valid, true);
+  const malformed = validateLogin({ email: "bad@", password: "x" });
+  assert.equal(malformed.valid, false);
+  const missingPassword = validateLogin({ email: "tester@gmail.com", password: "" });
+  assert.equal(missingPassword.valid, false);
 });

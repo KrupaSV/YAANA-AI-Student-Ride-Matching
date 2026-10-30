@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase, friendlyError } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { authRedirectUrl, isTestingRegistration, validateLogin, validateRegistration } from "../lib/validation";
+import { authRedirectUrl, emailFieldCopy, validateLogin, validateRegistration } from "../lib/validation";
 import AuthLayout from "../components/AuthLayout";
 import { useTitle } from "../lib/useTitle";
 
@@ -11,8 +11,10 @@ export default function AuthPage({ mode = "login" }) {
   useTitle(isRegister ? "Get started" : "Log in");
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { domains, configured, loading, session, confirmed } = useAuth();
-  const testing = isTestingRegistration();
+  const { domains, configured, loading, session, confirmed, registrationMode: regMode, isTestingRegistration: testing } = useAuth();
+  const emailField = isRegister && !testing
+    ? emailFieldCopy("production", domains)
+    : emailFieldCopy("testing");
   const [form, setForm] = useState({ name: "", usn: "", email: "", password: "", confirmPassword: "" });
   const [errors, setErrors] = useState({});
   const [notice, setNotice] = useState(params.get("notice") === "confirm" ? "confirm" : "");
@@ -39,7 +41,7 @@ export default function AuthPage({ mode = "login" }) {
       return;
     }
 
-    const result = isRegister ? validateRegistration(form, domains) : validateLogin(form, domains);
+    const result = isRegister ? validateRegistration(form, domains, regMode) : validateLogin(form);
     setErrors(result.errors);
     if (!result.valid) return;
 
@@ -51,7 +53,7 @@ export default function AuthPage({ mode = "login" }) {
           password: form.password,
           options: {
             emailRedirectTo: authRedirectUrl("/dashboard"),
-            data: { full_name: result.name, usn: result.usn },
+            data: { full_name: result.name, usn: result.usn || "" },
           },
         });
         if (signError) throw signError;
@@ -120,7 +122,12 @@ export default function AuthPage({ mode = "login" }) {
       {error && <p className="alert alert-error" role="alert">{error}</p>}
 
       <form className="form-grid auth-form" onSubmit={submit} noValidate>
-        {isRegister && (
+        {isRegister && testing && (
+          <Field label="Full name" error={errors.name}>
+            <input value={form.name} autoComplete="name" onChange={(event) => update("name", event.target.value)} required />
+          </Field>
+        )}
+        {isRegister && !testing && (
           <div className="auth-fields-pair">
             <Field label="Full name" error={errors.name}>
               <input value={form.name} autoComplete="name" onChange={(event) => update("name", event.target.value)} required />
@@ -130,10 +137,17 @@ export default function AuthPage({ mode = "login" }) {
             </Field>
           </div>
         )}
-        <Field label={testing ? "Email" : isRegister ? "DSU college email" : "College email"} error={errors.email}>
-          <input type="email" value={form.email} autoComplete="email" placeholder={testing ? "name@example.com" : `name@${domains[0] || "dsu.edu.in"}`} onChange={(event) => update("email", event.target.value)} required />
+        <Field label={emailField.label} error={errors.email}>
+          <input
+            type="email"
+            value={form.email}
+            autoComplete="email"
+            placeholder={emailField.placeholder}
+            onChange={(event) => update("email", event.target.value)}
+            required
+          />
           {isRegister && testing && (
-            <p className="field-note">Testing mode accepts any valid email. You still have to open the confirmation message before publishing trips.</p>
+            <p className="field-note">Testing mode accepts any valid email, including Gmail and Outlook. You still have to open the confirmation message before publishing trips.</p>
           )}
         </Field>
         <Field label="Password" error={errors.password}>

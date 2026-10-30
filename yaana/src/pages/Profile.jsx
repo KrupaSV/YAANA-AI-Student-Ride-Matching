@@ -120,8 +120,8 @@ export default function Profile() {
         </aside>
         <form className="profile-form form-grid" onSubmit={save}>
           <label className="field"><span>Full name</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label>
-          <label className="field"><span>USN</span><input value={profile?.usn || ""} readOnly /></label>
-          <label className="field"><span>College email</span><input value={user?.email || ""} readOnly /></label>
+          <label className="field"><span>USN</span><input value={profile?.usn || "Not provided"} readOnly /></label>
+          <label className="field"><span>Email address</span><input value={user?.email || ""} readOnly /></label>
           <label className="field"><span>Department</span><input value={form.department} onChange={(event) => setForm({ ...form, department: event.target.value })} /></label>
           <label className="field">
             <span>Preferred transport</span>

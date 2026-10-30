@@ -55,10 +55,13 @@ export function friendlyError(error) {
     return "This email is already registered. Log in instead.";
   }
   if (lower.includes("email not confirmed")) {
-    return "Confirm your college email before logging in.";
+    return "Confirm your email before logging in.";
   }
   if (lower.includes("otp_expired") || lower.includes("expired")) {
     return "This email link has expired. Request a new one.";
+  }
+  if (lower.includes("approved college email") || lower.includes("limited to approved")) {
+    return "This email domain is not accepted while DSU-only registration is on. Switch testing mode back on, or use an approved college address.";
   }
   if (lower.includes("rate limit") || lower.includes("too many")) {
     return "Too many attempts. Wait a moment and try again.";

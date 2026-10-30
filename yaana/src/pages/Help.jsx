@@ -1,8 +1,9 @@
-import { isTestingRegistration } from "../lib/validation";
+import { useAuth } from "../lib/auth";
 import { useTitle } from "../lib/useTitle";
 
 export default function Help() {
   useTitle("Help");
+  const { isTestingRegistration: testing } = useAuth();
   return (
     <>
       <header className="page-head">
@@ -12,8 +13,8 @@ export default function Help() {
       <section className="stack">
         <article className="card">
           <h2>Verification</h2>
-          <p>{isTestingRegistration()
-            ? "Temporary testing mode is on. Any valid email may register. Opening the confirmation email is still required before trips and matches. Restore DSU-only registration by setting VITE_REGISTRATION_MODE=production and setting public.app_settings.registration_mode to production."
+          <p>{testing
+            ? "Temporary testing mode is on. Any valid email may register, including Gmail and Outlook, and a USN is not required. Opening the confirmation email is still required before trips and matches. Restore DSU-only registration by setting VITE_REGISTRATION_MODE=production and setting public.app_settings.registration_mode to production."
             : "An address must use an exact allowed domain, currently @dsu.edu.in unless the project owner adds another domain in the database and the frontend environment. Opening the confirmation email marks the profile verified. YAANA does not check a university roster."}</p>
         </article>
         <article className="card">
