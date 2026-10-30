@@ -4,7 +4,7 @@ import { supabase, fmtDate, friendlyError } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { fetchDetour, predictMatch } from "../lib/api";
 import { explainMatch, MAX_TIME_DIFFERENCE_MIN, openSeats } from "../lib/matching";
-import { BANGALORE_NOTICE, demoRequestSeat, isDemoRecord, mergeDemoTrips } from "../lib/demo";
+import { CHICAGO_NOTICE, demoRequestSeat, isDemoRecord, mergeDemoTrips } from "../lib/demo";
 import PageBanner from "../components/PageBanner";
 import { useTitle } from "../lib/useTitle";
 import EmptyState from "../components/EmptyState";
@@ -122,7 +122,7 @@ export default function Matches() {
     if (isDemoRecord(trip)) {
       const result = demoRequestSeat({ userId: user.id, displayName: profile?.full_name, trip });
       if (result.error) setError(result.error);
-      else setStatus(result.reserved ? "Seat reserved on this 2013 test booking." : "Request sent. It is not a reserved seat until the owner accepts it.");
+      else setStatus(result.reserved ? "Seat reserved on this Chicago test trip." : "Request sent. It is not a reserved seat until the owner accepts it.");
       return;
     }
     const { error: insertError } = await supabase.from("ride_requests").insert({
@@ -149,7 +149,7 @@ export default function Matches() {
       />
       {error && <p className="alert alert-error" role="alert">{error}</p>}
       {status && <p className="alert alert-success" role="status">{status}</p>}
-      {(mine.some((trip) => trip.is_bangalore) || others.some((trip) => trip.is_bangalore)) && <p className="alert alert-info">{BANGALORE_NOTICE}</p>}
+      {(mine.some((trip) => trip.is_chicago) || others.some((trip) => trip.is_chicago)) && <p className="alert alert-info">{CHICAGO_NOTICE}</p>}
       {loading ? <Skeleton /> : mine.length === 0 ? (
         <EmptyState eyebrow="No reference trip" title="Create a trip before comparing." body="Matching needs one of your future open trips." to="/create-trip" action="Create a trip" />
       ) : (

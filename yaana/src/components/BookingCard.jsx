@@ -17,12 +17,12 @@ export default function BookingCard({ trip, children }) {
       </div>
       <p className="muted">{fmtDate(trip.departure_at)} · {seats} open of {trip.seats_available}</p>
       {trip.owner_display_name && <p className="muted">Posted by {trip.owner_display_name}</p>}
-      {trip.is_bangalore && <p className="muted">Bengaluru cab booking from 2013. The date is moved forward so you can test it.</p>}
-      {trip.is_demo && !trip.is_bangalore && <p className="muted">Demo listing for testing. Not a live student trip.</p>}
+      {trip.is_chicago && <p className="muted">Chicago rideshare trip from 25 October 2019. The date is moved forward so you can test it.</p>}
+      {trip.is_demo && !trip.is_chicago && <p className="muted">Demo listing for testing. Not a live student trip.</p>}
       {Number.isFinite(Number(trip.distance_km)) && (
         <p className="muted">
-          {trip.is_bangalore
-            ? `Straight-line length ${Number(trip.distance_km).toFixed(1)} km between the recorded pickup and drop.`
+          {trip.is_chicago
+            ? `Recorded trip length ${Number(trip.distance_km).toFixed(1)} km. The map line joins the recorded pickup and drop.`
             : `Road distance ${Number(trip.distance_km).toFixed(1)} km from the saved driving route.`}
         </p>
       )}

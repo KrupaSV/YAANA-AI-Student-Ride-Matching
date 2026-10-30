@@ -5,7 +5,7 @@ import { supabase, friendlyError } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { TRANSPORT_MODES } from "../lib/matching";
 import {
-  BANGALORE_NOTICE,
+  CHICAGO_NOTICE,
   demoRequests,
   demoRevealEmail,
   demoRequestSeat,
@@ -146,7 +146,7 @@ export default function Trips() {
         toast(result.error, "error");
       } else {
         const message = result.reserved
-          ? "Seat reserved on this 2013 test booking."
+          ? "Seat reserved on this Chicago test trip."
           : "Request sent. This is not a reserved seat until the owner accepts it.";
         setStatus(message);
         toast(message, "success");
@@ -225,7 +225,7 @@ export default function Trips() {
           <option value="completed">Completed</option>
         </select>
       </div>
-      {(trips.some((trip) => trip.is_bangalore) || available.some((trip) => trip.is_bangalore)) && <p className="alert alert-info">{BANGALORE_NOTICE}</p>}
+      {(trips.some((trip) => trip.is_chicago) || available.some((trip) => trip.is_chicago)) && <p className="alert alert-info">{CHICAGO_NOTICE}</p>}
       {error && <p className="alert alert-error" role="alert">{error}</p>}
       {status && <p className="alert alert-success" role="status">{status}</p>}
       {loading ? <Skeleton /> : tab === "mine" ? (
@@ -271,7 +271,7 @@ export default function Trips() {
             {sent.length === 0 ? <p className="muted">You have not requested a seat.</p> : sent.filter((request) => !search || `${request.trips?.origin_name} ${request.trips?.destination_name}`.toLowerCase().includes(search.toLowerCase())).map((request) => (
               <article className="trip-card" key={request.id}>
                 <strong>{request.trips?.origin_name} → {request.trips?.destination_name}</strong>
-                <p className="muted">Status: {request.status}. {request.status === "accepted" ? (request.trips?.is_bangalore ? "Seat reserved on this 2013 test booking." : "The owner accepted this seat.") : "Not reserved yet."}</p>
+                <p className="muted">Status: {request.status}. {request.status === "accepted" ? (request.trips?.is_chicago ? "Seat reserved on this Chicago test trip." : "The owner accepted this seat.") : "Not reserved yet."}</p>
                 {["pending", "accepted"].includes(request.status) && (
                   <button className="btn btn-secondary" type="button" disabled={busy === request.id} onClick={() => run(request.id, "cancel_ride_request")}>Cancel request</button>
                 )}

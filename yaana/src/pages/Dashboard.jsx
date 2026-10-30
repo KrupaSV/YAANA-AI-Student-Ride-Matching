@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase, fmtDate, friendlyError } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { BANGALORE_NOTICE, mergeDemoTrips } from "../lib/demo";
+import { CHICAGO_NOTICE, mergeDemoTrips } from "../lib/demo";
 import { useTitle } from "../lib/useTitle";
 import EmptyState from "../components/EmptyState";
 import Skeleton from "../components/Skeleton";
@@ -66,7 +66,7 @@ export default function Dashboard() {
         action={<Link className="btn btn-primary" to="/create-trip">Create a trip</Link>}
       />
       {error && <p className="alert alert-error" role="alert">{error}</p>}
-      {(trips.some((trip) => trip.is_bangalore) || candidates.some((trip) => trip.is_bangalore)) && <p className="alert alert-info">{BANGALORE_NOTICE}</p>}
+      {(trips.some((trip) => trip.is_chicago) || candidates.some((trip) => trip.is_chicago)) && <p className="alert alert-info">{CHICAGO_NOTICE}</p>}
       {loading ? <Skeleton rows={4} /> : (
         <div className="dash-board">
           <div className="stack">

@@ -1,8 +1,0 @@
-{
-  "source": "Bangalore point-to-point cab bookings with recorded pickup and drop coordinates",
-  "page": "https://github.com/adityakumar9/Xride_Bangalore",
-  "sheet": "https://docs.google.com/spreadsheets/d/1a2lv-O9V8kjnHVdE4CEMqRLYFreE0fBAMHEfX81aQ2g",
-  "period": "2013 weekday mornings (07:00-10:59) and evenings (16:00-20:59)",
-  "rows_in_file": 8000,
-  "note": "Dates are shifted forward on the site so the trips stay upcoming. These are not DSU student trips."
-}

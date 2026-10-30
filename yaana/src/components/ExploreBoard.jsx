@@ -8,7 +8,7 @@ import Skeleton from "./Skeleton";
 import { useAuth } from "../lib/auth";
 import { supabase, friendlyError, fmtDate } from "../lib/supabase";
 import { haversineKm, openSeats, TRANSPORT_MODES } from "../lib/matching";
-import { BANGALORE_NOTICE, mergeDemoTrips } from "../lib/demo";
+import { CHICAGO_NOTICE, mergeDemoTrips } from "../lib/demo";
 
 const emptyDraft = {
   pickup: null,
@@ -175,7 +175,7 @@ export default function ExploreBoard() {
 
   const mapSource = selected
     ? filtered.filter((trip) => haversineKm([trip.origin_lat, trip.origin_lng], [selected.origin_lat, selected.origin_lng]) < 30)
-    : (filtered.some((trip) => trip.is_bangalore) ? filtered.filter((trip) => trip.is_bangalore) : filtered);
+    : (filtered.some((trip) => trip.is_chicago) ? filtered.filter((trip) => trip.is_chicago) : filtered);
   const listings = mapSource.slice(0, 80).map((trip) => ({
     id: trip.id,
     lat: trip.origin_lat,
@@ -289,7 +289,7 @@ export default function ExploreBoard() {
           </form>
 
           <div className="explore-rail">
-            {showResults && trips.some((trip) => trip.is_bangalore) && <p className="alert alert-info">{BANGALORE_NOTICE}</p>}
+            {showResults && trips.some((trip) => trip.is_chicago) && <p className="alert alert-info">{CHICAGO_NOTICE}</p>}
             {authLoading || loading ? (
               <Skeleton rows={3} />
             ) : error ? (

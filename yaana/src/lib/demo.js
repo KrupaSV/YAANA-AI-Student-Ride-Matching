@@ -1,11 +1,11 @@
-import { bangaloreBoardTrips, BANGALORE_NOTICE } from "./bangaloreBoard";
+import { chicagoBoardTrips, CHICAGO_NOTICE } from "./chicagoBoard";
 
 const STORAGE_KEY = "yaana-demo-state";
 
-export { BANGALORE_NOTICE };
+export { CHICAGO_NOTICE };
 
 function isBoardId(id) {
-  return String(id || "").startsWith("blr-");
+  return String(id || "").startsWith("chi-");
 }
 
 function emptyState() {
@@ -47,7 +47,7 @@ export function isDemoRecord(row) {
 }
 
 function catalog(userId) {
-  return bangaloreBoardTrips(userId);
+  return chicagoBoardTrips(userId);
 }
 
 function seedState() {
@@ -115,7 +115,7 @@ export function demoRequestSeat({ userId, displayName, trip, note }) {
     return { error: "You already have an open request for this trip." };
   }
   const now = new Date().toISOString();
-  const reserved = Boolean(trip.is_bangalore);
+  const reserved = Boolean(trip.is_chicago);
   const request = {
     id: crypto.randomUUID(),
     trip_id: trip.id,
@@ -137,7 +137,7 @@ export function demoRequestSeat({ userId, displayName, trip, note }) {
       kind: reserved ? "request_accepted" : "request_received",
       title: reserved ? "Seat reserved" : "Request sent",
       body: reserved
-        ? `Seat reserved on the 2013 booking ${trip.origin_name} → ${trip.destination_name}. That file has no student account to accept it.`
+        ? `Seat reserved on the Chicago rideshare trip ${trip.origin_name} → ${trip.destination_name}. That file has no student account to accept it.`
         : `Request sent for ${trip.origin_name} → ${trip.destination_name}. The owner still has to accept it.`,
       related_id: request.id,
       read_at: null,
@@ -237,7 +237,7 @@ export function demoRevealEmail(requestId) {
   if (!request || request.status !== "accepted") {
     return { error: "Email is available after a request is accepted." };
   }
-  return { error: "This 2013 Bengaluru booking has no rider email on file." };
+  return { error: "This Chicago rideshare trip has no rider email on file." };
 }
 
 export function demoMarkRead(id, userId) {
