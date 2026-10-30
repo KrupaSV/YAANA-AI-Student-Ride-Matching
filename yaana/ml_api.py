@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import threading
 import time
 
@@ -40,18 +41,40 @@ TRANSPORT_NOTE = (
     "The model always receives 1."
 )
 
+LOCAL_ORIGINS = (
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5175",
+)
+
+
+def parse_cors_origins(raw: str | None) -> list[str]:
+    """Local Vite origins plus explicit production URLs from CORS_ORIGINS. Wildcards are ignored."""
+    origins: list[str] = []
+    seen: set[str] = set()
+    extras = [part.strip() for part in (raw or "").split(",")]
+    for item in [*LOCAL_ORIGINS, *extras]:
+        origin = item.strip().rstrip("/")
+        if not origin or origin == "*":
+            continue
+        if not (origin.startswith("http://") or origin.startswith("https://")):
+            continue
+        if origin not in seen:
+            seen.add(origin)
+            origins.append(origin)
+    return origins
+
+
+ALLOWED_ORIGINS = parse_cors_origins(os.environ.get("CORS_ORIGINS"))
+
 app = FastAPI(title="YAANA Match Intelligence API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5174",
-        "http://localhost:5175",
-        "http://127.0.0.1:5175",
-    ],
-    allow_methods=["GET", "POST"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -358,3 +381,14 @@ def detour(body: DetourBody):
         "provider": "OSRM",
         "limitation": via["limitation"],
     }
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        "ml_api:app",
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", "8000")),
+        reload=False,
+    )

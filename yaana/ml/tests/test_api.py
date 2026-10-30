@@ -259,3 +259,108 @@ def test_route_reports_provider_failure(monkeypatch):
         "destination_lng": 77.64,
     })
     assert response.status_code == 502
+
+
+def test_reverse_uses_provider_results(monkeypatch):
+    monkeypatch.setattr(ml_api, "enforce_rate", lambda *args, **kwargs: None)
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"display_name": "DSU Innovation Campus, Bengaluru"}
+
+    monkeypatch.setattr(ml_api.httpx, "get", lambda *args, **kwargs: FakeResponse())
+    response = client.get("/geo/reverse", params={"lat": 12.89, "lng": 77.64})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["label"] == "DSU Innovation Campus, Bengaluru"
+    assert body["lat"] == 12.89
+    assert body["lng"] == 77.64
+
+
+def test_route_returns_geometry(monkeypatch):
+    monkeypatch.setattr(ml_api, "enforce_rate", lambda *args, **kwargs: None)
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "code": "Ok",
+                "routes": [{
+                    "distance": 4200,
+                    "duration": 600,
+                    "geometry": {"coordinates": [[77.61, 12.93], [77.64, 12.89]]},
+                }],
+            }
+
+    monkeypatch.setattr(ml_api.httpx, "get", lambda *args, **kwargs: FakeResponse())
+    response = client.post("/geo/route", json={
+        "origin_lat": 12.93,
+        "origin_lng": 77.61,
+        "destination_lat": 12.89,
+        "destination_lng": 77.64,
+    })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["distance_km"] == 4.2
+    assert body["duration_min"] == 10.0
+    assert body["geometry"][0] == [12.93, 77.61]
+
+
+def test_parse_cors_keeps_localhost_and_adds_production_urls():
+    origins = ml_api.parse_cors_origins(
+        "https://yaana.example.com, https://www.yaana.app/"
+    )
+    assert "http://localhost:5173" in origins
+    assert "http://127.0.0.1:5173" in origins
+    assert "https://yaana.example.com" in origins
+    assert "https://www.yaana.app" in origins
+    assert "*" not in origins
+
+
+def test_parse_cors_ignores_wildcard_and_non_urls():
+    origins = ml_api.parse_cors_origins("*, ftp://bad.example, yaana.example.com")
+    assert "*" not in origins
+    assert "ftp://bad.example" not in origins
+    assert "yaana.example.com" not in origins
+    assert "http://localhost:5173" in origins
+
+
+def test_cors_allows_localhost_origin():
+    response = client.get("/", headers={"Origin": "http://localhost:5173"})
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+
+def test_cors_allows_configured_production_origin():
+    origin = "https://yaana.example.com"
+    added = origin not in ml_api.ALLOWED_ORIGINS
+    if added:
+        ml_api.ALLOWED_ORIGINS.append(origin)
+    try:
+        response = client.get("/", headers={"Origin": origin})
+        assert response.status_code == 200
+        assert response.headers.get("access-control-allow-origin") == origin
+    finally:
+        if added:
+            ml_api.ALLOWED_ORIGINS.remove(origin)
+
+
+def test_cors_rejects_unknown_origin():
+    response = client.get("/", headers={"Origin": "https://unknown.example"})
+    assert response.status_code == 200
+    assert response.headers.get("access-control-allow-origin") != "https://unknown.example"
+
+
+def test_cors_preflight_allows_localhost_post():
+    response = client.options(
+        "/predict",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert response.status_code in {200, 204}
+    assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
