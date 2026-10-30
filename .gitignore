@@ -1,0 +1,30 @@
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Environment secrets
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Build files
+dist/
+**/dist/
+dist-ssr/
+
+# Logs
+*.log
+
+# Editor files
+.vscode/
+.idea/

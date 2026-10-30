@@ -1,0 +1,104 @@
+{
+  "dataset": "chicago_tnp_pairs.csv",
+  "source": "City of Chicago Transportation Network Providers - Trips, 2019-10-25",
+  "rows": 8000,
+  "rows_used_after_grouped_split": 3408,
+  "synthetic": false,
+  "label": "This score comes from a Random Forest trained on real Chicago rideshare trips published by the City of Chicago. A pair is labeled shareable when the recorded pickups are within 0.8 km, the drop-offs within 1 km, and the starts within 30 minutes. The city file does not say which two riders shared a car, and these trips are not DSU commutes.",
+  "split": {
+    "train": 2641,
+    "validation": 331,
+    "test": 436,
+    "crossed_pairs_held_out": 4592
+  },
+  "grouping": "A pair is used only when both City of Chicago trip ids fall in the same split, so one trip is not scored in train and test.",
+  "validation": {
+    "accuracy": 0.994,
+    "precision": 0.9896,
+    "recall": 1.0,
+    "f1": 0.9948,
+    "roc_auc": 0.9999,
+    "confusion_matrix": [
+      [
+        139,
+        2
+      ],
+      [
+        0,
+        190
+      ]
+    ],
+    "classification_report": {
+      "0": {
+        "precision": 1.0,
+        "recall": 0.9858156028368794,
+        "f1-score": 0.9928571428571429,
+        "support": 141.0
+      },
+      "1": {
+        "precision": 0.9895833333333334,
+        "recall": 1.0,
+        "f1-score": 0.9947643979057592,
+        "support": 190.0
+      },
+      "accuracy": 0.9939577039274925,
+      "macro avg": {
+        "precision": 0.9947916666666667,
+        "recall": 0.9929078014184397,
+        "f1-score": 0.993810770381451,
+        "support": 331.0
+      },
+      "weighted avg": {
+        "precision": 0.9940206445115812,
+        "recall": 0.9939577039274925,
+        "f1-score": 0.9939519418276476,
+        "support": 331.0
+      }
+    }
+  },
+  "test": {
+    "accuracy": 0.9977,
+    "precision": 0.9958,
+    "recall": 1.0,
+    "f1": 0.9979,
+    "roc_auc": 0.9999,
+    "confusion_matrix": [
+      [
+        197,
+        1
+      ],
+      [
+        0,
+        238
+      ]
+    ],
+    "classification_report": {
+      "0": {
+        "precision": 1.0,
+        "recall": 0.9949494949494949,
+        "f1-score": 0.9974683544303797,
+        "support": 198.0
+      },
+      "1": {
+        "precision": 0.99581589958159,
+        "recall": 1.0,
+        "f1-score": 0.9979035639412998,
+        "support": 238.0
+      },
+      "accuracy": 0.9977064220183486,
+      "macro avg": {
+        "precision": 0.997907949790795,
+        "recall": 0.9974747474747474,
+        "f1-score": 0.9976859591858398,
+        "support": 436.0
+      },
+      "weighted avg": {
+        "precision": 0.9977160185789414,
+        "recall": 0.9977064220183486,
+        "f1-score": 0.9977059229248728,
+        "support": 436.0
+      }
+    }
+  },
+  "warning": "This score comes from a Random Forest trained on real Chicago rideshare trips published by the City of Chicago. A pair is labeled shareable when the recorded pickups are within 0.8 km, the drop-offs within 1 km, and the starts within 30 minutes. The city file does not say which two riders shared a car, and these trips are not DSU commutes."
+}

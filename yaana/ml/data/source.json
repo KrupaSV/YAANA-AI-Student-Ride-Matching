@@ -1,0 +1,13 @@
+{
+  "provider": "City of Chicago",
+  "dataset": "Transportation Network Providers - Trips",
+  "page": "https://data.cityofchicago.org/Transportation/Transportation-Network-Providers-Trips/m6dm-c72p",
+  "api": "https://data.cityofchicago.org/resource/m6dm-c72p.json",
+  "window": "2019-10-25 16:00 through 17:15",
+  "raw_rows": 9000,
+  "usable_trips": 7619,
+  "positive_pairs": 4000,
+  "negative_pairs": 4000,
+  "label": "shareable when recorded pickups are within 0.8 km, drop-offs within 1 km, and starts within 30 minutes",
+  "not_observed": "The city file does not publish which two trips shared a vehicle."
+}

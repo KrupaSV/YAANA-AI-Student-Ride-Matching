@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#F7F5EF" />
+    <script>
+      (function () {
+        try {
+          var choice = localStorage.getItem("yaana-theme") || "system";
+          var dark = choice === "dark" || (choice === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.dataset.theme = dark ? "dark" : "light";
+          document.documentElement.dataset.themeChoice = choice;
+        } catch (e) {}
+      })();
+    </script>
+    <meta name="description" content="YAANA matches confirmed Dayananda Sagar University students who are travelling similar routes." />
+    <link rel="icon" href="/yaana-logo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet" />
+    <title>YAANA | Better journeys, together</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
