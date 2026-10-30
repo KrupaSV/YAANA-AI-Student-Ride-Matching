@@ -5,6 +5,7 @@ import time
 import httpx
 import joblib
 import pandas as pd
+import sklearn
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -17,6 +18,27 @@ NOMINATIM = "https://nominatim.openstreetmap.org"
 OSRM = "https://router.project-osrm.org"
 USER_AGENT = "YAANA-DSU-student-rides/2.0 (educational campus project)"
 BENGALURU_VIEWBOX = "77.45,12.80,77.80,13.15"
+CHICAGO_VIEWBOX = "-87.94,42.08,-87.50,41.62"
+# yaana_model.joblib was fit with this scikit-learn release. Scoring refuses any other release.
+REQUIRED_SKLEARN = "1.9.1"
+# Same mile factor the Chicago board uses when it stores recorded miles as kilometres.
+KM_PER_MILE = 1.60934
+# chicago_tnp_pairs.csv time_difference_min runs from 0 through 45. Wider gaps are not scored.
+TRAINING_TIME_MAX_MIN = 45
+SCORE_NOTE = (
+    "This Chicago rule score is based on Chicago rideshare data. "
+    "It is not the probability that two DSU students will share a ride."
+)
+DISTANCE_NOTE = (
+    "The app sends distance_km in kilometres. Only that feature is divided by 1.60934 "
+    "so the Chicago model receives miles, matching the training column. "
+    "detour_km and destination_distance_km stay in kilometres."
+)
+TRANSPORT_NOTE = (
+    "same_transport_mode is 1 on every Chicago training row, so this model has not learned "
+    "transport-mode compatibility. The value sent by the app is used only for a separate eligibility check. "
+    "The model always receives 1."
+)
 
 app = FastAPI(title="YAANA Match Intelligence API")
 app.add_middleware(
@@ -38,17 +60,50 @@ _lock = threading.Lock()
 SAVED = None
 MODEL = None
 FEATURES = None
-LOAD_ERROR = None
 
-if MODEL_PATH.exists():
+
+def sklearn_guard():
+    installed = sklearn.__version__
+    if installed != REQUIRED_SKLEARN:
+        return (
+            f"scikit-learn {installed} does not match the model training version {REQUIRED_SKLEARN}. "
+            "YAANA will not score with a different scikit-learn version. "
+            r"Start the API with the project virtual environment: ..\.venv\Scripts\python.exe -m uvicorn ml_api:app --reload --port 8000"
+        )
+    return None
+
+
+def pickled_sklearn_version(model):
+    version = getattr(model, "_sklearn_version", None)
+    if version:
+        return str(version)
+    for step in (getattr(model, "named_steps", None) or {}).values():
+        version = getattr(step, "_sklearn_version", None)
+        if version:
+            return str(version)
+    return None
+
+
+LOAD_ERROR = sklearn_guard()
+if LOAD_ERROR is None and MODEL_PATH.exists():
     try:
         SAVED = joblib.load(MODEL_PATH)
-        MODEL = SAVED.get("pipeline") or SAVED.get("model")
-        FEATURES = SAVED.get("features")
+        loaded = SAVED.get("pipeline") or SAVED.get("model")
+        pickled = pickled_sklearn_version(loaded)
+        if pickled and pickled != REQUIRED_SKLEARN:
+            LOAD_ERROR = (
+                f"yaana_model.joblib was saved with scikit-learn {pickled}, "
+                f"but scoring requires {REQUIRED_SKLEARN}."
+            )
+        elif loaded is None or not SAVED.get("features"):
+            LOAD_ERROR = "The saved model file has no pipeline or feature list."
+        else:
+            MODEL = loaded
+            FEATURES = SAVED.get("features")
     except Exception as exc:
-        LOAD_ERROR = type(exc).__name__
-else:
-    LOAD_ERROR = "missing"
+        LOAD_ERROR = f"{type(exc).__name__}: {exc}"
+elif LOAD_ERROR is None:
+    LOAD_ERROR = "yaana_model.joblib is missing."
 
 
 class TripFeatures(BaseModel):
@@ -112,30 +167,70 @@ def simplify(coordinates, limit=120):
     return [points[round(index * step)] for index in range(limit)]
 
 
+def kilometres_to_training_miles(distance_km: float) -> float:
+    """Application distances are kilometres. The Chicago pair column named distance_km is recorded miles."""
+    return round(float(distance_km) / KM_PER_MILE, 3)
+
+
+def model_feature_frame(trip: TripFeatures) -> pd.DataFrame:
+    """Build the row the saved forest sees. Other distance features are left in kilometres."""
+    row = trip.model_dump()
+    row["distance_km"] = kilometres_to_training_miles(trip.distance_km)
+    row["same_transport_mode"] = 1
+    return pd.DataFrame([row])
+
+
 def constraint_report(trip: TripFeatures) -> dict:
     reasons = []
     seats_ok = trip.seats_available > 0
     detour_ok = trip.detour_km <= trip.max_detour_km
     time_ok = True if trip.max_time_difference_min is None else trip.time_difference_min <= trip.max_time_difference_min
+    transport_ok = trip.same_transport_mode == 1
     if not seats_ok:
         reasons.append("No seats are available.")
     if not detour_ok:
         reasons.append("The estimated road detour is above the allowed limit.")
     if not time_ok:
         reasons.append("The departure times are too far apart.")
+    if not transport_ok:
+        reasons.append("The trips use different transport modes.")
     return {
         "seats_ok": seats_ok,
         "detour_ok": detour_ok,
         "time_ok": time_ok,
-        "eligible": seats_ok and detour_ok and time_ok,
+        "transport_ok": transport_ok,
+        "eligible": seats_ok and detour_ok and time_ok and transport_ok,
         "reasons": reasons,
     }
 
 
 def score_trip(trip: TripFeatures) -> dict:
     if MODEL is None or not FEATURES:
-        raise HTTPException(status_code=503, detail="The trained model is unavailable.")
-    frame = pd.DataFrame([trip.model_dump()])
+        raise HTTPException(status_code=503, detail=LOAD_ERROR or "The trained model is unavailable.")
+    report = {
+        "constraints": constraint_report(trip),
+        "data_note": (SAVED or {}).get("data_note") or "The trained model did not include a dataset note.",
+        "score_note": SCORE_NOTE,
+        "distance_input_km": trip.distance_km,
+        "distance_feature_miles": kilometres_to_training_miles(trip.distance_km),
+        "distance_conversion_note": DISTANCE_NOTE,
+        "model_same_transport_mode": 1,
+        "transport_note": TRANSPORT_NOTE,
+        "training_time_max_min": TRAINING_TIME_MAX_MIN,
+    }
+    if trip.time_difference_min > TRAINING_TIME_MAX_MIN:
+        report.update({
+            "in_distribution": False,
+            "prediction": None,
+            "match_probability": None,
+            "match_percentage": None,
+            "range_note": (
+                f"The departure gap is {trip.time_difference_min} minutes, outside the Chicago training range of "
+                f"0–{TRAINING_TIME_MAX_MIN} minutes. No Chicago rule score was calculated, and the gap was not changed."
+            ),
+        })
+        return report
+    frame = model_feature_frame(trip)
     if SAVED and SAVED.get("pipeline") is not None:
         probabilities = MODEL.predict_proba(frame)[0]
         prediction = int(MODEL.predict(frame)[0])
@@ -146,13 +241,14 @@ def score_trip(trip: TripFeatures) -> dict:
         prediction = int(MODEL.predict(model_frame)[0])
         classes = list(MODEL.classes_)
     match_probability = float(probabilities[classes.index(1)]) if 1 in classes else 0.0
-    return {
+    report.update({
+        "in_distribution": True,
         "prediction": prediction,
         "match_probability": round(match_probability, 4),
         "match_percentage": round(match_probability * 100, 2),
-        "constraints": constraint_report(trip),
-        "data_note": (SAVED or {}).get("data_note") or "The trained model did not include a dataset note.",
-    }
+        "range_note": f"The departure gap is inside the Chicago training range of 0–{TRAINING_TIME_MAX_MIN} minutes.",
+    })
+    return report
 
 
 @app.get("/")
@@ -161,6 +257,9 @@ def home():
         "app": "YAANA Match Intelligence",
         "status": "running" if MODEL is not None else "model-missing",
         "model": "Random Forest Classifier",
+        "sklearn": sklearn.__version__,
+        "required_sklearn": REQUIRED_SKLEARN,
+        "load_error": LOAD_ERROR,
         "flow": "Chicago rideshare pairs, geographic shareability label",
     }
 
@@ -178,8 +277,8 @@ def search(q: str = Query(min_length=3, max_length=120)):
             "q": q,
             "format": "jsonv2",
             "limit": 5,
-            "countrycodes": "in",
-            "viewbox": BENGALURU_VIEWBOX,
+            "countrycodes": "us,in",
+            "viewbox": CHICAGO_VIEWBOX,
             "bounded": 0,
         },
         "nominatim",

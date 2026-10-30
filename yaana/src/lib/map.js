@@ -1,19 +1,19 @@
 import { fetchRoute } from "./api";
 import { simplifyRoute } from "./matching";
 
-export const DEFAULT_CENTER = [12.9345, 77.6055];
-export const DEFAULT_ZOOM = 13;
+export const DEFAULT_CENTER = [41.8781, -87.6298];
+export const DEFAULT_ZOOM = 12;
 
 export const EXAMPLE_PICKUP = {
-  lat: 12.9345,
-  lng: 77.6055,
-  label: "Example pickup",
+  lat: 41.87887,
+  lng: -87.62519,
+  label: "The Loop",
 };
 
 export const EXAMPLE_DROP = {
-  lat: 12.891,
-  lng: 77.641,
-  label: "Example destination",
+  lat: 41.92269,
+  lng: -87.64949,
+  label: "Lincoln Park",
 };
 
 let exampleCache;
@@ -29,6 +29,22 @@ export function asLatLng(value) {
     return [Number(value.lat), Number(value.lng)];
   }
   return null;
+}
+
+export function placeFromQuery(query) {
+  const text = String(query || "").trim();
+  const match = text.match(/^(.*?)[(\[]?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*[)\]]?\s*$/);
+  if (!match) return null;
+  const lat = Number(match[2]);
+  const lng = Number(match[3]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  if (Math.abs(lat) < 1 && Math.abs(lng) < 1) return null;
+  const name = match[1].replace(/[\s(\[]+$/g, "").trim();
+  return {
+    label: name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+    lat,
+    lng,
+  };
 }
 
 export function asRoute(value) {
@@ -56,7 +72,8 @@ export function loadExampleRoute() {
         return exampleCache;
       })
       .catch((err) => {
-        exampleCache = {
+        exampleRequest = null;
+        return {
           ok: false,
           geometry: [],
           distanceKm: null,
@@ -64,8 +81,6 @@ export function loadExampleRoute() {
           provider: "",
           error: err.message || "The routing service is not available.",
         };
-        exampleRequest = null;
-        return exampleCache;
       });
   }
   return exampleRequest;

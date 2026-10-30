@@ -4,6 +4,7 @@ import { supabase, friendlyError } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { fetchRoute, reversePlace } from "../lib/api";
 import { simplifyRoute, TRANSPORT_MODES } from "../lib/matching";
+import { loadOpenStudentTrips, syncMatchesForTrip } from "../lib/syncMatches";
 import { useTitle } from "../lib/useTitle";
 import MapPicker from "../components/MapPicker";
 import LocationSearch from "../components/LocationSearch";
@@ -39,24 +40,31 @@ export default function CreateTrip() {
     }
   }, [modeTouched, profile?.transport_preference]);
 
-  async function drawRoute(nextOrigin, nextDestination) {
+  useEffect(() => {
+    let cancelled = false;
     setRoute([]);
     setDistanceKm(null);
     setDurationMin(null);
-    if (!nextOrigin || !nextDestination) return;
+    if (!origin || !destination) return undefined;
     setRouting(true);
     setError("");
-    try {
-      const body = await fetchRoute([nextOrigin.lat, nextOrigin.lng], [nextDestination.lat, nextDestination.lng]);
-      setRoute(simplifyRoute(body.geometry));
-      setDistanceKm(body.distance_km);
-      setDurationMin(body.duration_min);
-    } catch (err) {
-      setError(err.message || "The routing service did not return a road route.");
-    } finally {
-      setRouting(false);
-    }
-  }
+    fetchRoute([origin.lat, origin.lng], [destination.lat, destination.lng])
+      .then((body) => {
+        if (cancelled) return;
+        setRoute(simplifyRoute(body.geometry));
+        setDistanceKm(body.distance_km);
+        setDurationMin(body.duration_min);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message || "The routing service did not return a road route.");
+      })
+      .finally(() => {
+        if (!cancelled) setRouting(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [origin, destination]);
 
   async function locate() {
     setGeoNote("");
@@ -69,7 +77,6 @@ export default function CreateTrip() {
         const place = await reversePlace(position.coords.latitude, position.coords.longitude);
         const next = { label: place.label, lat: place.lat, lng: place.lng };
         setOrigin(next);
-        drawRoute(next, destination);
       } catch (err) {
         setGeoNote(err.message || "The current location could not be named.");
       }
@@ -88,13 +95,8 @@ export default function CreateTrip() {
       setGeoNote("The pin was saved, but no place name came back.");
     }
     const place = { label, lat: point[0], lng: point[1] };
-    if (!origin) {
-      setOrigin(place);
-      drawRoute(place, destination);
-    } else {
-      setDestination(place);
-      drawRoute(origin, place);
-    }
+    if (!origin) setOrigin(place);
+    else setDestination(place);
   }
 
   async function publish(event) {
@@ -119,7 +121,7 @@ export default function CreateTrip() {
       return;
     }
     setSaving(true);
-    const { error: insertError } = await supabase.from("trips").insert({
+    const { data: saved, error: insertError } = await supabase.from("trips").insert({
       user_id: user.id,
       origin_name: origin.label,
       destination_name: destination.label,
@@ -137,13 +139,17 @@ export default function CreateTrip() {
       distance_km: distanceKm,
       duration_min: durationMin,
       owner_display_name: profile?.full_name || null,
-    });
-    setSaving(false);
-    if (insertError) setError(friendlyError(insertError));
-    else {
-      setMessage("Trip saved.");
-      navigate("/trips", { replace: true, state: { saved: true } });
+    }).select("*").single();
+    if (insertError) {
+      setSaving(false);
+      setError(friendlyError(insertError));
+      return;
     }
+    const loaded = await loadOpenStudentTrips(user.id);
+    const matched = saved ? await syncMatchesForTrip(saved, loaded.others || []) : { created: 0 };
+    setSaving(false);
+    setMessage(matched.created ? "Trip saved. A compatible classmate was found." : "Trip saved. YAANA will keep looking for compatible classmates.");
+    navigate("/matches", { replace: true, state: { published: true, created: matched.created || 0 } });
   }
 
   return (
@@ -159,8 +165,8 @@ export default function CreateTrip() {
       {geoNote && <p className="alert alert-info" role="status">{geoNote}</p>}
       <form className="split" onSubmit={publish}>
         <div className="stack">
-          <LocationSearch label="Pickup" placeholder="Search a pickup" value={origin} onSelect={(place) => { setOrigin(place); drawRoute(place, destination); }} />
-          <LocationSearch label="Destination" placeholder="Search a destination" value={destination} onSelect={(place) => { setDestination(place); drawRoute(origin, place); }} />
+          <LocationSearch label="Pickup" placeholder="Search a pickup" value={origin} onSelect={setOrigin} />
+          <LocationSearch label="Destination" placeholder="Search a destination" value={destination} onSelect={setDestination} />
           <button className="btn btn-secondary" type="button" onClick={locate}>Use my location for pickup</button>
           <label className="field">
             <span>Departure</span>

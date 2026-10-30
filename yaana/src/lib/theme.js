@@ -16,7 +16,7 @@ export function applyTheme(choice) {
   document.documentElement.dataset.themeChoice = next;
   localStorage.setItem(KEY, next);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.content = resolvedTheme(next) === "dark" ? "#182126" : "#F7F5EF";
+  if (meta) meta.content = resolvedTheme(next) === "dark" ? "#122536" : "#FFF8EC";
   return next;
 }
 

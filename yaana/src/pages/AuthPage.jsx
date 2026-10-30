@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase, friendlyError } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { authRedirectUrl, validateLogin, validateRegistration } from "../lib/validation";
+import { authRedirectUrl, isTestingRegistration, validateLogin, validateRegistration } from "../lib/validation";
 import AuthLayout from "../components/AuthLayout";
 import { useTitle } from "../lib/useTitle";
 
@@ -12,6 +12,7 @@ export default function AuthPage({ mode = "login" }) {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { domains, configured, loading, session, confirmed } = useAuth();
+  const testing = isTestingRegistration();
   const [form, setForm] = useState({ name: "", usn: "", email: "", password: "", confirmPassword: "" });
   const [errors, setErrors] = useState({});
   const [notice, setNotice] = useState(params.get("notice") === "confirm" ? "confirm" : "");
@@ -102,6 +103,7 @@ export default function AuthPage({ mode = "login" }) {
     <AuthLayout
       tone={isRegister ? "register" : "login"}
       title={isRegister ? <>Get <em>started.</em></> : <>Welcome <em>back.</em></>}
+      lede={isRegister ? "Find your people. Share your journey." : "Your next journey starts here."}
     >
       {notice === "sent" && (
         <div className="alert alert-success" role="status">
@@ -117,19 +119,22 @@ export default function AuthPage({ mode = "login" }) {
       )}
       {error && <p className="alert alert-error" role="alert">{error}</p>}
 
-      <form className="form-grid" onSubmit={submit} noValidate>
+      <form className="form-grid auth-form" onSubmit={submit} noValidate>
         {isRegister && (
-          <>
+          <div className="auth-fields-pair">
             <Field label="Full name" error={errors.name}>
               <input value={form.name} autoComplete="name" onChange={(event) => update("name", event.target.value)} required />
             </Field>
             <Field label="USN" error={errors.usn}>
               <input value={form.usn} autoCapitalize="characters" onChange={(event) => update("usn", event.target.value.toUpperCase())} required />
             </Field>
-          </>
+          </div>
         )}
-        <Field label="College email" error={errors.email}>
-          <input type="email" value={form.email} autoComplete="email" placeholder={`name@${domains[0] || "dsu.edu.in"}`} onChange={(event) => update("email", event.target.value)} required />
+        <Field label={testing ? "Email" : isRegister ? "DSU college email" : "College email"} error={errors.email}>
+          <input type="email" value={form.email} autoComplete="email" placeholder={testing ? "name@example.com" : `name@${domains[0] || "dsu.edu.in"}`} onChange={(event) => update("email", event.target.value)} required />
+          {isRegister && testing && (
+            <p className="field-note">Testing mode accepts any valid email. You still have to open the confirmation message before publishing trips.</p>
+          )}
         </Field>
         <Field label="Password" error={errors.password}>
           <div className="password-row">
@@ -142,22 +147,33 @@ export default function AuthPage({ mode = "login" }) {
         </Field>
         {isRegister && (
           <Field label="Confirm password" error={errors.confirmPassword}>
-            <input type={showPassword ? "text" : "password"} value={form.confirmPassword} autoComplete="new-password" onChange={(event) => update("confirmPassword", event.target.value)} required />
+            <div className="password-row">
+              <input type={showPassword ? "text" : "password"} value={form.confirmPassword} autoComplete="new-password" onChange={(event) => update("confirmPassword", event.target.value)} required />
+              <button type="button" className="btn btn-ghost" onClick={() => setShowPassword((value) => !value)}>
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
           </Field>
         )}
+        {!isRegister && (
+          <p className="auth-forgot">
+            <Link to="/forgot-password">Forgot password?</Link>
+          </p>
+        )}
         <button className="btn btn-primary btn-block" disabled={busy}>
-          {busy ? "Please wait…" : isRegister ? "Get started" : "Log in"}
+          {busy ? "Please wait…" : isRegister ? "Create account" : "Log in"}
         </button>
       </form>
 
-      {!isRegister && (
-        <button className="text-button" type="button" onClick={resend} disabled={busy}>Resend confirmation email</button>
-      )}
-      {!isRegister && <p className="form-switch"><Link to="/forgot-password">Forgot password?</Link></p>}
-      <p className="form-switch">
-        {isRegister ? "Already confirmed?" : "New student?"}{" "}
-        <Link to={isRegister ? "/login" : "/register"}>{isRegister ? "Log in" : "Get started"}</Link>
-      </p>
+      <div className="auth-footer">
+        {!isRegister && (
+          <button className="text-button" type="button" onClick={resend} disabled={busy}>Resend confirmation email</button>
+        )}
+        <p className="form-switch">
+          {isRegister ? "Already have an account?" : "New student?"}{" "}
+          <Link to={isRegister ? "/login" : "/register"}>{isRegister ? "Log in" : "Get started"}</Link>
+        </p>
+      </div>
     </AuthLayout>
   );
 }

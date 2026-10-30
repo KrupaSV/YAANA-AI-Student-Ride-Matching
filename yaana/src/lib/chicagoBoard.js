@@ -111,6 +111,15 @@ function seatsFor(id) {
   return 1 + (sum % 3);
 }
 
+export function searchChicagoPlaces(query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (q.length < 3) return [];
+  return PLACES
+    .filter(([name]) => name.toLowerCase().includes(q))
+    .slice(0, 6)
+    .map(([label, lat, lng]) => ({ label, lat, lng }));
+}
+
 export const CHICAGO_TRIP_COUNT = TRIP_COUNT;
 export const CHICAGO_BOARD_COUNT = trips.length;
 export const CHICAGO_NOTICE = `${CHICAGO_TRIP_COUNT.toLocaleString("en-IN")} real Chicago rideshare trips are loaded, from the City of Chicago open data for 25 October 2019, 4:00–5:15 pm. This board shows ${CHICAGO_BOARD_COUNT} distinct routes. Dates are moved to tomorrow. These are not DSU students.`;

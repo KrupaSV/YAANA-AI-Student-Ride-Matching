@@ -1,4 +1,6 @@
-const DOMAIN_PATTERN = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
+import { DOMAIN_PATTERN, isTestingRegistration, registrationMode } from "./registrationMode.js";
+
+export { isTestingRegistration, registrationMode };
 
 export function configuredDomains() {
   const raw =
@@ -21,11 +23,23 @@ export function emailParts(value) {
   return { email, local: parts[0], domain: parts[1] };
 }
 
-export function isAllowedCollegeEmail(value, domains = configuredDomains()) {
+export function isValidEmailAddress(value) {
   const parts = emailParts(value);
   if (!parts) return false;
   if (!/^[a-z0-9._%+-]+$/.test(parts.local)) return false;
+  return DOMAIN_PATTERN.test(parts.domain);
+}
+
+export function isAllowedCollegeEmail(value, domains = configuredDomains(), mode = registrationMode()) {
+  if (!isValidEmailAddress(value)) return false;
+  if (mode === "testing") return true;
+  const parts = emailParts(value);
   return domains.map((domain) => domain.toLowerCase()).includes(parts.domain);
+}
+
+function emailPolicyError(domains, mode = registrationMode()) {
+  if (mode === "testing") return "Enter a valid email address.";
+  return `Use an exact student address at ${domains.map((domain) => `@${domain}`).join(" or ")}. A matching domain is not enrollment verification.`;
 }
 
 export function validateName(value) {
@@ -57,12 +71,10 @@ export function validatePassword(value) {
   return "";
 }
 
-export function validateRegistration(input, domains = configuredDomains()) {
+export function validateRegistration(input, domains = configuredDomains(), mode = registrationMode()) {
   const errors = {};
   const nameError = validateName(input.name);
-  const emailError = isAllowedCollegeEmail(input.email, domains)
-    ? ""
-    : `Use an exact student address at ${domains.map((domain) => `@${domain}`).join(" or ")}. A matching domain is not enrollment verification.`;
+  const emailError = isAllowedCollegeEmail(input.email, domains, mode) ? "" : emailPolicyError(domains, mode);
   const passwordError = validatePassword(input.password);
   const usnError = validateUsn(input.usn);
 
@@ -83,10 +95,12 @@ export function validateRegistration(input, domains = configuredDomains()) {
   };
 }
 
-export function validateLogin(input, domains = configuredDomains()) {
+export function validateLogin(input, domains = configuredDomains(), mode = registrationMode()) {
   const errors = {};
-  if (!isAllowedCollegeEmail(input.email, domains)) {
-    errors.email = `Use an exact student address at ${domains.map((domain) => `@${domain}`).join(" or ")}.`;
+  if (!isAllowedCollegeEmail(input.email, domains, mode)) {
+    errors.email = mode === "testing"
+      ? "Enter a valid email address."
+      : `Use an exact student address at ${domains.map((domain) => `@${domain}`).join(" or ")}.`;
   }
   if (!input.password) errors.password = "Enter your password.";
   return {

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase, friendlyError } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { TRANSPORT_MODES } from "../lib/matching";
-import { CHICAGO_NOTICE, demoRequestSeat, demoRequests, isDemoRecord, mergeDemoTrips } from "../lib/demo";
+import { demoRequestSeat, demoRequests, isDemoRecord, mergeDemoTrips } from "../lib/demo";
 import { useTitle } from "../lib/useTitle";
 import { useToast } from "../components/Toast";
 import BookingCard from "../components/BookingCard";
@@ -129,7 +129,6 @@ export default function FindRides() {
         </select>
         <button className="btn btn-secondary" type="button" onClick={load}>Refresh</button>
       </div>
-      {trips.some((trip) => trip.is_chicago) && <p className="alert alert-info">{CHICAGO_NOTICE}</p>}
       {error && <p className="alert alert-error" role="alert">{error}</p>}
       {status && <p className="alert alert-success" role="status">{status}</p>}
       {loading ? <Skeleton /> : filtered.length === 0 ? (

@@ -12,9 +12,34 @@ export default function AppShell() {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem("yaana-sidebar") === "collapsed");
   const [unread, setUnread] = useState(0);
+  const [pendingMatches, setPendingMatches] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
   const reduce = useReducedMotion();
+
+  useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    function onKey(event) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    function onResize() {
+      if (window.innerWidth >= 1024) setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("is-nav-open", open);
+    return () => document.documentElement.classList.remove("is-nav-open");
+  }, [open]);
 
   useEffect(() => {
     if (!profile?.id || !supabase) return undefined;
@@ -26,6 +51,18 @@ export default function AppShell() {
       .is("read_at", null)
       .then(({ count }) => {
         if (active) setUnread(count || 0);
+      });
+    supabase
+      .from("trip_matches")
+      .select("id, user_a_id, user_b_id, response_a, response_b, status")
+      .or(`user_a_id.eq.${profile.id},user_b_id.eq.${profile.id}`)
+      .eq("status", "pending")
+      .then(({ data }) => {
+        if (!active) return;
+        const waiting = (data || []).filter((row) => (
+          row.user_a_id === profile.id ? row.response_a : row.response_b
+        ) === "pending").length;
+        setPendingMatches(waiting);
       });
     return () => { active = false; };
   }, [profile?.id, location.pathname]);
@@ -43,13 +80,14 @@ export default function AppShell() {
   }
 
   return (
-    <div className={`app-shell ${collapsed ? "is-collapsed" : ""}`}>
+    <div className={`app-shell ${collapsed ? "is-collapsed" : ""} ${open ? "is-nav-open" : ""}`}>
       <a className="skip-link" href="#content">Skip to content</a>
       {open && <button className="backdrop" type="button" aria-label="Close menu" onClick={() => setOpen(false)} />}
-      <aside className={`sidebar ${open ? "is-open" : ""}`}>
+      <aside className={`sidebar ${open ? "is-open" : ""}`} id="account-menu">
         <Navbar
           profile={profile}
           unread={unread}
+          pendingMatches={pendingMatches}
           collapsed={collapsed}
           onNavigate={() => setOpen(false)}
           onSignOut={logout}
@@ -58,7 +96,14 @@ export default function AppShell() {
       </aside>
       <div className="main-stage">
         <header className="topbar">
-          <button className="menu-button" type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+          <button
+            className="menu-button"
+            type="button"
+            aria-expanded={open}
+            aria-controls="account-menu"
+            aria-label={open ? "Close menu" : "Open menu"}
+            onClick={() => setOpen((value) => !value)}
+          >
             {open ? <X size={20} /> : <Menu size={20} />}
             <span>Menu</span>
           </button>
@@ -80,6 +125,18 @@ export default function AppShell() {
             <p className="alert alert-info" role="status">
               Trip columns are present. Run yaana/supabase/migrations/20261026213000_theme_and_account.sql
               so theme, departure notes, and account deletion can be saved. Then refresh.
+            </p>
+          )}
+          {schemaGap === "matches" && (
+            <p className="alert alert-info" role="status">
+              Two-way ride matches need yaana/supabase/migrations/20261030173000_trip_matches.sql
+              in the Supabase SQL editor. Run it once, then refresh. Existing student trips stay in place.
+            </p>
+          )}
+          {schemaGap === "registration" && (
+            <p className="alert alert-info" role="status">
+              Registration testing mode needs yaana/supabase/migrations/20261030190000_registration_mode.sql
+              in the Supabase SQL editor. Run it once, then refresh. Existing student accounts stay in place.
             </p>
           )}
           {confirmed && profile?.verification_status && profile.verification_status !== "verified" && (

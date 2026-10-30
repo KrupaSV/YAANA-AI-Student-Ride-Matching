@@ -29,6 +29,10 @@ export default function Settings() {
     document.documentElement.dataset.motion = profile?.reduced_motion ? "reduced" : "normal";
   }, [profile?.reduced_motion]);
 
+  useEffect(() => {
+    setTheme(readTheme());
+  }, [profile?.theme]);
+
   async function toggle(key) {
     setError("");
     setMessage("");
@@ -46,13 +50,11 @@ export default function Settings() {
     setTheme(saved);
     setMessage("");
     setError("");
+    toast(`Appearance set to ${saved}.`, "success");
     if (!profile || !supabase) return;
     supabase.from("profiles").update({ theme: saved }).eq("id", user.id).then(async ({ error: updateError }) => {
-      if (updateError) setError(friendlyError(updateError));
-      else {
-        await refreshProfile(user.id);
-        setMessage("Theme saved on this account.");
-      }
+      if (updateError) return;
+      await refreshProfile(user.id);
     });
   }
 

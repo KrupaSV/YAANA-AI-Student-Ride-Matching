@@ -17,7 +17,7 @@ const links = [
   ["/help", "Help", CircleHelp],
 ];
 
-export default function Navbar({ profile, unread = 0, collapsed, onNavigate, onSignOut, onToggleCollapse }) {
+export default function Navbar({ profile, unread = 0, pendingMatches = 0, collapsed, onNavigate, onSignOut, onToggleCollapse }) {
   const [menu, setMenu] = useState(false);
   const name = profile?.full_name || "Student";
 
@@ -46,6 +46,7 @@ export default function Navbar({ profile, unread = 0, collapsed, onNavigate, onS
             <Icon size={18} aria-hidden="true" />
             <span className="side-label">{label}</span>
             {to === "/notifications" && unread > 0 && <b className="count">{unread}</b>}
+            {to === "/matches" && pendingMatches > 0 && <b className="count">{pendingMatches}</b>}
           </NavLink>
         ))}
       </nav>

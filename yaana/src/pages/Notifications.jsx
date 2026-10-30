@@ -44,7 +44,7 @@ export default function Notifications() {
       </header>
       {error && <p className="alert alert-error" role="alert">{error}</p>}
       {loading ? <Skeleton /> : rows.length === 0 ? (
-        <EmptyState eyebrow="Quiet" title="No notifications yet." body="A request, acceptance, decline, or cancellation will appear here. Nothing is shown before that happens." />
+        <EmptyState eyebrow="Quiet" title="No notifications yet." body="A new ride match, acceptance, decline, or cancellation will appear here." />
       ) : rows.map((row) => (
         <article className="trip-card" key={row.id}>
           <strong>{row.title}</strong>

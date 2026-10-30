@@ -32,7 +32,7 @@ export default function PublicHeader() {
 
   useEffect(() => {
     function onResize() {
-      if (window.innerWidth > 880) setOpen(false);
+      if (window.innerWidth >= 1024) setOpen(false);
     }
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -44,7 +44,11 @@ export default function PublicHeader() {
       if (event.key === "Escape") setOpen(false);
     }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    document.documentElement.classList.add("is-nav-open");
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.documentElement.classList.remove("is-nav-open");
+    };
   }, [open]);
 
   const actions = [

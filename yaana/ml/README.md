@@ -9,13 +9,16 @@ The classifier is a scikit-learn Random Forest trained on real rideshare trips f
 - Pair file: `ml/data/chicago_tnp_pairs.csv` (4,000 shareable pairs and 4,000 non-shareable pairs).
 - Rebuild with `python -m ml.build_real_dataset` from the `yaana` folder.
 - Label: shareable when recorded pickups are within 0.8 km, drop-offs within 1 km, and starts within 30 minutes. The city file does not publish which two trips actually shared a vehicle.
-- Features: `time_difference_min`, `route_overlap_pct`, `detour_km`, `distance_km` (recorded miles), `same_transport_mode`, `destination_distance_km`. Trip ids are used only to split the data. `match_label` is not a feature.
-- Overlap and detour in training are measured on the straight line between the recorded pickup and drop-off. Live matching still uses the saved road line and OSRM for detour.
-- Every training pair is rideshare, so `same_transport_mode` is 1 throughout this file.
+- Features: `time_difference_min`, `route_overlap_pct`, `detour_km`, `distance_km` (recorded miles, despite the name), `same_transport_mode`, `destination_distance_km`. Trip ids are used only to split the data. `match_label` is not a feature.
+- Overlap and detour in training are measured on the straight line between the recorded pickup and drop-off. Live matching still uses the saved road line and OSRM for detour. Those two features stay in kilometres.
+- `time_difference_min` in this file runs from 0 to 45. The API does not score a wider gap and does not shorten the gap to fit.
+- Every training pair is rideshare, so `same_transport_mode` is 1 throughout this file. The live check for different modes is separate, and the saved model always receives 1.
 
 ## Install
 
-From the project root, using the existing virtual environment:
+Training and inference both use the project virtual environment, which has scikit-learn 1.9.1. `ml/requirements.txt` pins that release. The API refuses to load `yaana_model.joblib` when the installed scikit-learn is anything else.
+
+From the project root:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r yaana\ml\requirements.txt
@@ -46,8 +49,11 @@ cd yaana
 ..\.venv\Scripts\python.exe -m uvicorn ml_api:app --reload --port 8000
 ```
 
-- `GET /` reports whether the model loaded.
-- `POST /predict` returns the class, probability, and a separate constraint report for seats, detour, and optional time gap. A high score does not make an ineligible trip eligible.
+- `GET /` reports whether the model loaded and whether scikit-learn is 1.9.1.
+- `POST /predict` expects `distance_km` in kilometres. Before the forest runs, that one field is divided by 1.60934 and rounded to 3 decimals so it matches the miles in `chicago_tnp_pairs.csv`. `detour_km` and `destination_distance_km` are not converted.
+- The same request’s `same_transport_mode` is an eligibility check. The forest always receives 1, because that is the only value in the training file.
+- A departure gap above 45 minutes returns `in_distribution: false` and null probability, prediction, and percentage. The submitted gap is not rewritten.
+- Seats, detour, the optional time limit, and transport mode are reported separately from the Chicago rule score. A failed check does not erase an in-range score, and a score does not make a failed check eligible.
 - `GET /geo/search`, `GET /geo/reverse`, `POST /geo/route`, and `POST /geo/detour` proxy Nominatim and the public OSRM demo. Each provider is limited to about one request per second. They can refuse traffic.
 
 ## Tests
@@ -57,4 +63,4 @@ cd yaana
 ..\.venv\Scripts\python.exe -m pytest ml/tests/test_api.py -q
 ```
 
-Latest run: `7 passed, 1 warning in 7.37s`. The warning is Starlette's deprecation notice about `httpx` and `TestClient`. It is not a failing test.
+Latest run with the project virtual environment: `13 passed, 1 warning in 33.65s`. The warning is Starlette's deprecation notice about `httpx` and `TestClient`. It is not a failing test.

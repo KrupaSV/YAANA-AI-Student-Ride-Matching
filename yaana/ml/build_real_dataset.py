@@ -174,7 +174,9 @@ def pair_row(left, right, label):
         "time_difference_min": abs(left["minute"] - right["minute"]),
         "route_overlap_pct": overlap_percent(left, right),
         "detour_km": detour_km(left, right),
+        # Recorded trip miles, stored under a kilometre name. Live scoring converts app kilometres back to miles.
         "distance_km": round(left["miles"], 3),
+        # Every source trip is rideshare, so this column cannot teach transport-mode compatibility.
         "same_transport_mode": 1,
         "destination_distance_km": round(haversine(left["dropoff"], right["dropoff"]), 3),
         "match_label": label,

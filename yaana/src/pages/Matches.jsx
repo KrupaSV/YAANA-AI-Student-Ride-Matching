@@ -1,243 +1,300 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { supabase, fmtDate, friendlyError } from "../lib/supabase";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { supabase, fmtDate, friendlyError, initials } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { fetchDetour, predictMatch } from "../lib/api";
-import { explainMatch, MAX_TIME_DIFFERENCE_MIN, openSeats } from "../lib/matching";
-import { CHICAGO_NOTICE, demoRequestSeat, isDemoRecord, mergeDemoTrips } from "../lib/demo";
+import { openSeats } from "../lib/matching";
+import { evaluatePair } from "../lib/autoMatch";
+import {
+  loadOpenStudentTrips,
+  myResponse,
+  ownTripFromMatch,
+  peerFromMatch,
+  syncMatchesForUser,
+  theirResponse,
+} from "../lib/syncMatches";
 import PageBanner from "../components/PageBanner";
 import { useTitle } from "../lib/useTitle";
+import { useToast } from "../components/Toast";
 import EmptyState from "../components/EmptyState";
 import Skeleton from "../components/Skeleton";
+import StatusLabel from "../components/StatusLabel";
 import MapPicker from "../components/MapPicker";
+
+const STATUS_COPY = {
+  pending: "Waiting",
+  confirmed: "Confirmed",
+  rejected: "Declined",
+};
 
 export default function Matches() {
   useTitle("Matches");
-  const { user, profile, verified } = useAuth();
+  const { user, verified } = useAuth();
+  const toast = useToast();
+  const location = useLocation();
+  const [rows, setRows] = useState([]);
   const [mine, setMine] = useState([]);
-  const [others, setOthers] = useState([]);
-  const [selected, setSelected] = useState("");
-  const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [comparing, setComparing] = useState(false);
+  const [missingTable, setMissingTable] = useState(false);
   const [error, setError] = useState("");
-  const [status, setStatus] = useState("");
-  const [sort, setSort] = useState("overlap");
+  const [status, setStatus] = useState(location.state?.published ? "Trip saved. Looking for compatible classmates…" : "");
+  const [busy, setBusy] = useState("");
+  const [selectedId, setSelectedId] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      const now = new Date().toISOString();
-      const [myTrips, otherTrips] = await Promise.all([
-        supabase.from("trips").select("*").eq("user_id", user.id).eq("status", "open").gt("departure_at", now),
-        supabase.from("trips").select("*").in("status", ["open", "full"]).gt("departure_at", now).neq("user_id", user.id),
-      ]);
-      if (!active) return;
-      if (myTrips.error || otherTrips.error) setError(friendlyError(myTrips.error || otherTrips.error));
-      const all = mergeDemoTrips([...(myTrips.data || []), ...(otherTrips.data || [])], user.id, profile?.full_name);
-      const myOpen = all.filter((trip) => trip.user_id === user.id && trip.status === "open" && new Date(trip.departure_at) > new Date());
-      const otherOpen = all.filter((trip) => trip.user_id !== user.id && ["open", "full"].includes(trip.status) && new Date(trip.departure_at) > new Date());
-      setMine(myOpen);
-      setOthers(otherOpen);
-      setSelected(myOpen[0]?.id || "");
-      setLoading(false);
+  async function load() {
+    setLoading(true);
+    const synced = await syncMatchesForUser(user.id);
+    if (synced.missingTable) setMissingTable(true);
+    if (synced.error && !synced.missingTable) setError(synced.error);
+    else setError("");
+    if (synced.created > 0) {
+      setStatus(`${synced.created} new ${synced.created === 1 ? "match" : "matches"} found.`);
     }
-    load();
-    return () => { active = false; };
-  }, [user.id, profile?.full_name]);
+    setMine(synced.mine || []);
 
-  useEffect(() => {
-    const reference = mine.find((trip) => trip.id === selected);
-    if (!reference) {
-      setResults([]);
-      return undefined;
-    }
-    let active = true;
-    async function compare() {
-      setComparing(true);
-      setError("");
-      const explained = others.map((trip) => ({ trip, facts: explainMatch(reference, trip) }))
-        .sort((a, b) => (b.facts.overlap || 0) - (a.facts.overlap || 0));
-      const checked = [];
-      for (const item of explained.slice(0, 8)) {
-        const next = { ...item, detour: null, score: null, serviceError: "" };
-        if (!item.facts.comparable) {
-          next.serviceError = "This trip has no saved road route, so overlap and detour cannot be calculated.";
-          checked.push(next);
-          continue;
+    const { data, error: queryError } = await supabase
+      .from("trip_matches")
+      .select("*, trip_a:trips!trip_a_id(*), trip_b:trips!trip_b_id(*)")
+      .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`)
+      .order("created_at", { ascending: false });
+
+    if (queryError) {
+      const fallback = await supabase
+        .from("trip_matches")
+        .select("*")
+        .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`)
+        .order("created_at", { ascending: false });
+      if (fallback.error) {
+        if (synced.missingTable) {
+          const computed = await computedFallback(user.id);
+          setRows(computed);
+        } else {
+          setError(friendlyError(queryError));
+          setRows([]);
         }
-        try {
-          const detour = await fetchDetour({
-            origin_lat: reference.origin_lat,
-            origin_lng: reference.origin_lng,
-            pickup_lat: item.trip.origin_lat,
-            pickup_lng: item.trip.origin_lng,
-            drop_lat: item.trip.destination_lat,
-            drop_lng: item.trip.destination_lng,
-            destination_lat: reference.destination_lat,
-            destination_lng: reference.destination_lng,
-            direct_distance_km: Number(reference.distance_km),
-          });
-          next.detour = detour.detour_km;
-          const prediction = await predictMatch({
-            time_difference_min: item.facts.timeDifference,
-            route_overlap_pct: item.facts.overlap,
-            detour_km: detour.detour_km,
-            distance_km: Number(reference.distance_km),
-            same_transport_mode: item.facts.sameTransport ? 1 : 0,
-            destination_distance_km: item.facts.destinationSeparation,
-            seats_available: openSeats(item.trip),
-            max_detour_km: Number(profile?.max_detour_km || 5),
-            max_time_difference_min: MAX_TIME_DIFFERENCE_MIN,
-          });
-          next.score = prediction;
-        } catch (err) {
-          next.serviceError = err.message;
-        }
-        checked.push(next);
-        if (!active) return;
+      } else {
+        setRows(await attachTrips(fallback.data || []));
       }
-      const unchecked = explained.slice(8).map((item) => ({
-        ...item,
-        detour: null,
-        score: null,
-        serviceError: "Not sent to routing. YAANA checks the eight closest route overlaps first so the public routing service is not flooded.",
-      }));
-      if (active) {
-        setResults([...checked, ...unchecked]);
-        setComparing(false);
-      }
+    } else {
+      setRows(data || []);
     }
-    compare();
-    return () => { active = false; };
-  }, [selected, mine, others, profile?.max_detour_km]);
-
-  async function requestSeat(trip) {
-    setStatus("");
-    setError("");
-    if (!verified) {
-      setError("Confirm your DSU email before requesting a seat.");
-      return;
-    }
-    if (isDemoRecord(trip)) {
-      const result = demoRequestSeat({ userId: user.id, displayName: profile?.full_name, trip });
-      if (result.error) setError(result.error);
-      else setStatus(result.reserved ? "Seat reserved on this Chicago test trip." : "Request sent. It is not a reserved seat until the owner accepts it.");
-      return;
-    }
-    const { error: insertError } = await supabase.from("ride_requests").insert({
-      trip_id: trip.id,
-      requester_id: user.id,
-      status: "pending",
-    });
-    if (insertError) setError(friendlyError(insertError));
-    else setStatus("Request sent. It is not a reserved seat until the owner accepts it.");
+    setLoading(false);
   }
 
-  const recommended = sortResults(results.filter((item) => item.score?.constraints?.eligible && item.score.prediction === 1), sort);
-  const ruledOut = sortResults(results.filter((item) => item.score && !(item.score.constraints.eligible && item.score.prediction === 1)), sort);
-  const unverified = sortResults(results.filter((item) => !item.score), sort);
-  const referenceTrip = mine.find((trip) => trip.id === selected);
+  useEffect(() => {
+    let active = true;
+    load().then(() => {
+      if (!active) return;
+    });
+    const channel = supabase
+      ?.channel(`trip-matches-${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_matches" }, () => {
+        load();
+      })
+      .subscribe();
+    return () => {
+      active = false;
+      channel?.unsubscribe();
+    };
+  }, [user.id]);
+
+  async function respond(match, response) {
+    if (!verified) {
+      setError("Confirm your DSU email before responding to a match.");
+      return;
+    }
+    setBusy(match.id);
+    setError("");
+    const { data, error: rpcError } = await supabase.rpc("respond_to_trip_match", {
+      p_match_id: match.id,
+      p_response: response,
+    });
+    setBusy("");
+    if (rpcError) {
+      setError(friendlyError(rpcError));
+      toast(friendlyError(rpcError), "error");
+      return;
+    }
+    const message = response === "accepted"
+      ? (data?.status === "confirmed" ? "You both accepted. This shared ride is confirmed." : "You accepted. Waiting for the other student.")
+      : "You declined this match.";
+    setStatus(message);
+    toast(message, "success");
+    await load();
+  }
+
+  const visible = useMemo(
+    () => [...rows].sort((a, b) => {
+      const rank = { pending: 0, confirmed: 1, rejected: 2 };
+      return (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || Number(b.score || 0) - Number(a.score || 0);
+    }),
+    [rows],
+  );
+  const selected = visible.find((row) => row.id === selectedId) || visible.find((row) => row.status !== "rejected") || visible[0];
+  const selectedPeer = selected ? peerFromMatch(selected, user.id) : null;
+  const selectedMine = selected ? ownTripFromMatch(selected, user.id) : mine[0];
 
   return (
     <>
       <PageBanner
         tone="teal"
         eyebrow="Matches"
-        title="Compare compatible routes."
-        lede="Overlap uses saved road geometry. Detour is extra driving distance from OSRM. The model is trained on real Chicago rideshare trips and never overrides seats or detour limits."
+        title="Your ride matches."
+        lede="When a classmate publishes a similar route on the same date, within about 30 minutes, YAANA creates a match for both of you. Accept or decline independently. The ride is confirmed only after both students accept."
       />
+      {missingTable && (
+        <p className="alert alert-info" role="status">
+          Two-way matches need one more database update. In the Supabase SQL editor, run
+          yaana/supabase/migrations/20261030173000_trip_matches.sql, then refresh. Student trips already saved are not deleted.
+        </p>
+      )}
       {error && <p className="alert alert-error" role="alert">{error}</p>}
       {status && <p className="alert alert-success" role="status">{status}</p>}
-      {(mine.some((trip) => trip.is_chicago) || others.some((trip) => trip.is_chicago)) && <p className="alert alert-info">{CHICAGO_NOTICE}</p>}
-      {loading ? <Skeleton /> : mine.length === 0 ? (
-        <EmptyState eyebrow="No reference trip" title="Create a trip before comparing." body="Matching needs one of your future open trips." to="/create-trip" action="Create a trip" />
+      {loading ? <Skeleton /> : visible.length === 0 ? (
+        <EmptyState
+          eyebrow="Looking"
+          title={mine.length === 0 ? "Create a trip before matching." : "No compatible classmates yet."}
+          body={mine.length === 0
+            ? "Matching starts after you publish a trip with a pickup, destination, and departure time."
+            : "YAANA will keep looking when another student publishes a similar route on the same date, around the same time. Chicago board listings are not used as student matches."}
+          to="/create-trip"
+          action="Create a trip"
+        />
       ) : (
-        <>
-          <section className="match-studio">
-            <div className="match-controls">
-              <p className="eyebrow">Reference route</p>
-              <label className="field">
-                <span>Your trip</span>
-                <select value={selected} onChange={(event) => setSelected(event.target.value)}>
-                  {mine.map((trip) => (
-                    <option key={trip.id} value={trip.id}>{trip.origin_name} → {trip.destination_name} · {fmtDate(trip.departure_at)}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Sort real results</span>
-                <select value={sort} onChange={(event) => setSort(event.target.value)}>
-                  <option value="overlap">Highest road overlap</option>
-                  <option value="time">Closest departure</option>
-                  <option value="detour">Smallest estimated detour</option>
-                </select>
-              </label>
-              <p>Your pickup and destination come from this saved trip. To search different places, create another trip.</p>
-              <Link className="btn btn-ink" to="/create-trip">Plan another route</Link>
-            </div>
-            <div>
-              {referenceTrip?.route_geometry?.length ? (
-                <MapPicker
-                  key={referenceTrip.id}
-                  origin={[referenceTrip.origin_lat, referenceTrip.origin_lng]}
-                  destination={[referenceTrip.destination_lat, referenceTrip.destination_lng]}
-                  originLabel={referenceTrip.origin_name}
-                  destinationLabel={referenceTrip.destination_name}
-                  route={referenceTrip.route_geometry}
-                  distanceKm={referenceTrip.distance_km}
-                  durationMin={referenceTrip.duration_min}
-                  transportMode={referenceTrip.transport_mode}
-                  selected
-                />
-              ) : (
-                <p className="alert alert-info">This older trip has no saved road geometry, so route overlap cannot be verified.</p>
-              )}
-            </div>
-          </section>
-          {comparing && <p role="status">Checking road detours and model scores…</p>}
-          <MatchGroup title="Recommended" items={recommended} empty="No trip currently passes the seat, detour, and time rules and is also classified as a match." onRequest={requestSeat} />
-          <MatchGroup title="Not recommended" items={ruledOut} empty="No scored trips were ruled out." onRequest={requestSeat} />
-          <MatchGroup title="Could not verify" items={unverified} empty="Every loaded trip was scored." onRequest={requestSeat} />
-          {others.length === 0 && <p className="muted">No other open trips are in the database.</p>}
-          <p className="form-switch"><Link to="/find-rides">Browse without scores</Link></p>
-        </>
+        <div className="split">
+          <div className="stack">
+            {visible.map((match) => {
+              const peer = peerFromMatch(match, user.id);
+              const mineTrip = ownTripFromMatch(match, user.id);
+              const mineReply = myResponse(match, user.id);
+              const theirs = theirResponse(match, user.id);
+              return (
+                <article className={`trip-card ${selected?.id === match.id ? "is-selected" : ""}`} key={match.id}>
+                  <div className="match-head">
+                    <PeerAvatar name={peer.name} src={peer.avatarUrl} />
+                    <div>
+                      <strong>{peer.name || "Classmate"}</strong>
+                      <p className="eyebrow">{STATUS_COPY[match.status] || match.status} · {match.score}% compatible</p>
+                    </div>
+                    <StatusLabel tone={match.status}>{STATUS_COPY[match.status] || match.status}</StatusLabel>
+                  </div>
+                  <p className="muted">Your trip: {mineTrip?.origin_name} → {mineTrip?.destination_name} · {fmtDate(mineTrip?.departure_at)}</p>
+                  <p className="muted">Their trip: {peer.trip?.origin_name} → {peer.trip?.destination_name} · {fmtDate(peer.trip?.departure_at)}</p>
+                  <p className="muted">{peer.trip?.transport_mode} · {openSeats(peer.trip)} open of {peer.trip?.seats_available} · {match.time_difference_min} min apart</p>
+                  <div className="row">
+                    <button className="btn btn-secondary" type="button" onClick={() => setSelectedId(match.id)}>Details</button>
+                    {match.status !== "rejected" && mineReply !== "accepted" && (
+                      <button className="btn btn-primary" type="button" disabled={busy === match.id} onClick={() => respond(match, "accepted")}>
+                        {busy === match.id ? "Saving…" : "Accept"}
+                      </button>
+                    )}
+                    {match.status !== "rejected" && mineReply !== "rejected" && (
+                      <button className="btn btn-ghost" type="button" disabled={busy === match.id} onClick={() => respond(match, "rejected")}>
+                        Decline
+                      </button>
+                    )}
+                  </div>
+                  {mineReply === "accepted" && match.status === "pending" && <p className="muted">You accepted. Waiting for {peer.name || "the other student"}.</p>}
+                  {theirs === "accepted" && mineReply === "pending" && <p className="muted">{peer.name || "The other student"} already accepted. Confirm or decline below.</p>}
+                </article>
+              );
+            })}
+          </div>
+          <MatchPreview match={selected} mine={selectedMine} peer={selectedPeer} userId={user.id} />
+        </div>
       )}
+      <p className="form-switch"><Link to="/find-rides">Browse all open trips</Link></p>
     </>
   );
 }
 
-function sortResults(items, sort) {
-  const value = (item) => {
-    if (sort === "time") return item.facts.timeDifference ?? Number.POSITIVE_INFINITY;
-    if (sort === "detour") return item.detour ?? Number.POSITIVE_INFINITY;
-    return -(item.facts.overlap ?? -1);
-  };
-  return [...items].sort((a, b) => value(a) - value(b));
+function PeerAvatar({ name, src }) {
+  if (src) return <img className="avatar" src={src} alt="" />;
+  return <span className="avatar" aria-hidden="true">{initials(name)}</span>;
 }
 
-function MatchGroup({ title, items, empty, onRequest }) {
+function MatchPreview({ match, mine, peer, userId }) {
+  if (!match || !peer?.trip) {
+    return <p className="alert alert-info">Choose a match to see both routes.</p>;
+  }
+  const facts = mine && peer.trip ? evaluatePair(mine, peer.trip) : null;
+  const route = peer.trip.route_geometry || mine?.route_geometry || [];
   return (
-    <section className="stack">
-      <h2>{title}</h2>
-      {items.length === 0 ? <p className="muted">{empty}</p> : items.map((item) => (
-        <article className="trip-card" key={item.trip.id}>
-          <strong>{item.trip.origin_name} → {item.trip.destination_name}</strong>
-          <ul className="explain">
-            <li>Road overlap: {item.facts.overlap == null ? "unavailable" : `${item.facts.overlap}% of sampled points on each saved road route are within 400 m.`}</li>
-            <li>Departure gap: {item.facts.timeDifference == null ? "unavailable" : `${item.facts.timeDifference} minutes.`}</li>
-            <li>Straight-line gap between destinations: {item.facts.destinationSeparation == null ? "unavailable" : `${item.facts.destinationSeparation} km. This is not road distance.`}</li>
-            <li>Estimated extra road distance: {item.detour == null ? "not verified" : `${item.detour} km via the other pickup and drop.`}</li>
-            <li>Open seats: {item.facts.openSeats}.</li>
-            {item.score && <li>Model score: {item.score.match_percentage}%. {item.score.data_note}</li>}
-            {item.score && !item.score.constraints.eligible && <li>{item.score.constraints.reasons.join(" ")}</li>}
-            {item.serviceError && <li>{item.serviceError}</li>}
-          </ul>
-          <button className="btn btn-primary" type="button" disabled={item.trip.status !== "open"} onClick={() => onRequest(item.trip)}>
-            Request seat
-          </button>
-        </article>
-      ))}
-    </section>
+    <div className="stack">
+      <article className="trip-card">
+        <p className="eyebrow">Shared ride</p>
+        <div className="match-head">
+          <PeerAvatar name={peer.name} src={peer.avatarUrl} />
+          <div>
+            <strong>{peer.name || "Classmate"}</strong>
+            <p className="muted">Compatibility {match.score} / 100</p>
+          </div>
+        </div>
+        <ul className="explain">
+          <li>Pickup: {peer.trip.origin_name}</li>
+          <li>Destination: {peer.trip.destination_name}</li>
+          <li>Departure: {fmtDate(peer.trip.departure_at)}</li>
+          <li>Transport: {peer.trip.transport_mode}</li>
+          <li>Open seats: {openSeats(peer.trip)} of {peer.trip.seats_available}</li>
+          <li>Pickup gap: {match.pickup_km == null ? "not stored" : `${match.pickup_km} km`}</li>
+          <li>Destination gap: {match.destination_km == null ? "not stored" : `${match.destination_km} km`}</li>
+          <li>Road overlap: {match.overlap_pct == null ? (facts?.overlapPct == null ? "unavailable" : `${facts.overlapPct}%`) : `${match.overlap_pct}%`}</li>
+          <li>Your reply: {myResponse(match, userId)}. Their reply: {theirResponse(match, userId)}.</li>
+        </ul>
+      </article>
+      {route.length > 1 ? (
+        <MapPicker
+          key={match.id}
+          origin={[peer.trip.origin_lat, peer.trip.origin_lng]}
+          destination={[peer.trip.destination_lat, peer.trip.destination_lng]}
+          originLabel={peer.trip.origin_name}
+          destinationLabel={peer.trip.destination_name}
+          route={route}
+          distanceKm={peer.trip.distance_km}
+          durationMin={peer.trip.duration_min}
+          transportMode={peer.trip.transport_mode}
+        />
+      ) : (
+        <p className="alert alert-info">No saved road geometry for this match yet.</p>
+      )}
+    </div>
   );
+}
+
+async function attachTrips(matches) {
+  const ids = [...new Set(matches.flatMap((row) => [row.trip_a_id, row.trip_b_id]))];
+  if (!ids.length) return matches;
+  const { data } = await supabase.from("trips").select("*").in("id", ids);
+  const byId = Object.fromEntries((data || []).map((trip) => [trip.id, trip]));
+  return matches.map((row) => ({ ...row, trip_a: byId[row.trip_a_id], trip_b: byId[row.trip_b_id] }));
+}
+
+async function computedFallback(userId) {
+  const loaded = await loadOpenStudentTrips(userId);
+  if (loaded.error) return [];
+  const rows = [];
+  for (const trip of loaded.mine) {
+    for (const other of loaded.others) {
+      const evaluation = evaluatePair(trip, other);
+      if (!evaluation.compatible) continue;
+      rows.push({
+        id: `${trip.id}:${other.id}`,
+        user_a_id: trip.user_id,
+        user_b_id: other.user_id,
+        a_display_name: trip.owner_display_name,
+        b_display_name: other.owner_display_name,
+        score: evaluation.score,
+        pickup_km: evaluation.pickupKm,
+        destination_km: evaluation.destinationKm,
+        overlap_pct: evaluation.overlapPct,
+        time_difference_min: evaluation.timeDifferenceMin,
+        status: "pending",
+        response_a: "pending",
+        response_b: "pending",
+        trip_a: trip,
+        trip_b: other,
+        ephemeral: true,
+      });
+    }
+  }
+  return rows;
 }

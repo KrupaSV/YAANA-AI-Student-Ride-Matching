@@ -1,8 +1,6 @@
-import { chicagoBoardTrips, CHICAGO_NOTICE } from "./chicagoBoard";
+import { chicagoBoardTrips } from "./chicagoBoard";
 
 const STORAGE_KEY = "yaana-demo-state";
-
-export { CHICAGO_NOTICE };
 
 function isBoardId(id) {
   return String(id || "").startsWith("chi-");
@@ -15,6 +13,7 @@ function emptyState() {
     notifications: [],
     cancelledTripIds: [],
     tripOverrides: {},
+    dismissedMatches: {},
   };
 }
 
@@ -32,6 +31,9 @@ function loadState() {
       if (isBoardId(id)) overrides[id] = value;
     }
     state.tripOverrides = overrides;
+    state.dismissedMatches = state.dismissedMatches && typeof state.dismissedMatches === "object"
+      ? state.dismissedMatches
+      : {};
     return state;
   } catch {
     return emptyState();
@@ -79,8 +81,13 @@ export function demoTrips(userId, displayName) {
 }
 
 export function mergeDemoTrips(dbTrips, userId, displayName) {
-  const live = dbTrips || [];
-  const liveIds = new Set(live.map((row) => row.id));
+  const live = [];
+  const liveIds = new Set();
+  for (const row of dbTrips || []) {
+    if (!row?.id || liveIds.has(row.id)) continue;
+    liveIds.add(row.id);
+    live.push(row);
+  }
   return [...live, ...demoTrips(userId, displayName).filter((row) => !liveIds.has(row.id))];
 }
 
@@ -230,6 +237,52 @@ export function demoRunAction(fn, id, userId, displayName) {
   }
 
   return { error: "Unknown action." };
+}
+
+export function demoUpdateTrip(id, userId, displayName, patch) {
+  const state = seedState(userId, displayName);
+  const trips = applyOverrides(catalog(userId, displayName), state);
+  const trip = trips.find((row) => row.id === id);
+  if (!trip) return { error: "Trip not found." };
+  if (trip.user_id !== userId) return { error: "You can edit only your own trip." };
+  if (trip.status !== "open") return { error: "Only an open trip can be edited." };
+  const when = new Date(patch.departure_at);
+  if (Number.isNaN(when.getTime()) || when <= new Date()) {
+    return { error: "Choose a departure time in the future." };
+  }
+  const seats = Number(patch.seats_available);
+  if (!Number.isInteger(seats) || seats < 1 || seats > 6) {
+    return { error: "Seats must be between 1 and 6." };
+  }
+  if (seats < Number(trip.seats_taken || 0)) {
+    return { error: "Seats cannot drop below the accepted requests." };
+  }
+  state.tripOverrides = {
+    ...(state.tripOverrides || {}),
+    [id]: {
+      ...(state.tripOverrides?.[id] || {}),
+      departure_at: when.toISOString(),
+      seats_available: seats,
+      transport_mode: patch.transport_mode,
+      preferences: patch.preferences?.trim() || null,
+    },
+  };
+  saveState(state);
+  return { error: null, message: "Trip details saved." };
+}
+
+export function demoDismissedIds(referenceTripId) {
+  return loadState().dismissedMatches?.[referenceTripId] || [];
+}
+
+export function demoDismissMatch(referenceTripId, candidateId) {
+  const state = loadState();
+  const current = state.dismissedMatches?.[referenceTripId] || [];
+  state.dismissedMatches = {
+    ...(state.dismissedMatches || {}),
+    [referenceTripId]: [...new Set([...current, candidateId])],
+  };
+  saveState(state);
 }
 
 export function demoRevealEmail(requestId) {

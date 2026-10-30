@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { searchPlaces } from "../lib/api";
+import { searchChicagoPlaces } from "../lib/chicagoBoard";
+import { placeFromQuery } from "../lib/map";
 
 export default function LocationSearch({ label, placeholder, value, onSelect, onQuery }) {
   const [query, setQuery] = useState(value?.label || "");
@@ -21,18 +23,59 @@ export default function LocationSearch({ label, placeholder, value, onSelect, on
       return undefined;
     }
 
+    const parsed = placeFromQuery(query);
+    if (parsed) {
+      request.current += 1;
+      const same = value && Math.abs(value.lat - parsed.lat) < 1e-5 && Math.abs(value.lng - parsed.lng) < 1e-5;
+      if (!same) onSelect(parsed);
+      setResults([parsed]);
+      setStatus("");
+      setOpen(false);
+      return undefined;
+    }
+
+    const local = searchChicagoPlaces(query);
+    const exact = local.find((place) => place.label.toLowerCase() === query.trim().toLowerCase());
+    if (exact) {
+      request.current += 1;
+      const same = value && Math.abs(value.lat - exact.lat) < 1e-4 && Math.abs(value.lng - exact.lng) < 1e-4;
+      if (!same) onSelect(exact);
+      setResults(local);
+      setStatus("");
+      setOpen(false);
+      return undefined;
+    }
+
+    if (local.length) {
+      setResults(local);
+      setOpen(true);
+      setActive(-1);
+      setStatus("");
+    }
+
     const current = ++request.current;
     const timer = setTimeout(async () => {
-      setStatus("Searching places…");
+      if (!local.length) setStatus("Searching places…");
       try {
         const body = await searchPlaces(query.trim());
         if (current !== request.current) return;
-        setResults(body.results || []);
+        const remote = body.results || [];
+        const merged = [
+          ...local,
+          ...remote.filter((place) => !local.some((item) => Math.abs(item.lat - place.lat) < 0.02 && Math.abs(item.lng - place.lng) < 0.02)),
+        ];
+        setResults(merged);
         setOpen(true);
         setActive(-1);
-        setStatus(body.results?.length ? "" : "No matching places. Try a more specific name.");
+        setStatus(merged.length ? "" : "No matching places. Try a more specific name, or drop a pin on the map.");
       } catch (error) {
         if (current !== request.current) return;
+        if (local.length) {
+          setResults(local);
+          setOpen(true);
+          setStatus("");
+          return;
+        }
         setResults([]);
         setStatus(error.status === 429
           ? "Place search is cooling down. Wait a second."

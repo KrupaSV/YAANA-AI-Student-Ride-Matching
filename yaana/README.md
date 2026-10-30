@@ -20,7 +20,7 @@ cd yaana
 ..\.venv\Scripts\python.exe -m uvicorn ml_api:app --reload --port 8000
 ```
 
-Place search, road routes, detours, and model scores need this process. If it is stopped, those screens show an error instead of a made-up route.
+Place search, road routes, detours, and Chicago rule scores need this process. Use the virtual environment above so scoring runs on scikit-learn 1.9.1, the version that trained `yaana_model.joblib`. A different scikit-learn install refuses to score and returns that reason. If the process is stopped, those screens show an error instead of a made-up route.
 
 ## Environment
 
@@ -29,6 +29,7 @@ Place search, road routes, detours, and model scores need this process. If it is
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY` (or a real `VITE_SUPABASE_ANON_KEY` longer than 30 characters)
 - `VITE_COLLEGE_EMAIL_DOMAIN=dsu.edu.in`
+- `VITE_REGISTRATION_MODE=testing` (use `production` to restore DSU-only signup)
 - `VITE_ML_API_URL=http://localhost:8000`
 
 A short placeholder in `.env` is ignored. Never put the service-role key in a `VITE_` variable or in frontend code.
@@ -53,6 +54,29 @@ If the script prints a notice about avatar storage, create a public `avatars` bu
 7. Do not disable Row Level Security.
 
 To allow another exact student domain later, insert it into `allowed_email_domains` and add it to `VITE_COLLEGE_EMAIL_DOMAINS`. A subdomain such as `mail.dsu.edu.in` is not accepted unless you add that exact domain. Domain match is not enrollment verification. The student still has to open the confirmation email.
+
+## Temporary testing registration
+
+Signup still uses Supabase Auth and still requires the confirmation email. Row Level Security stays on. No passwords or inboxes are hardcoded.
+
+**Enable testing (any valid email):**
+
+1. In `yaana/.env.local` set `VITE_REGISTRATION_MODE=testing` and restart `npm run dev`.
+2. In the Supabase SQL editor, run `yaana/supabase/migrations/20261030190000_registration_mode.sql` once. That file sets `public.app_settings.registration_mode` to `testing`.
+3. Keep Authentication → Providers → Email → Confirm email enabled.
+
+**Restore DSU-only registration:**
+
+1. Set `VITE_REGISTRATION_MODE=production` in `yaana/.env.local` and restart the Vite process.
+2. In the SQL editor run:
+
+```sql
+update public.app_settings
+set value = 'production', updated_at = now()
+where key = 'registration_mode';
+```
+
+Existing DSU student accounts are not rewritten. After restore, personal-email test accounts can still exist in Auth, but they cannot publish trips or match because the domain check returns.
 
 ## How to test
 

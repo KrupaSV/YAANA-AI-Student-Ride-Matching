@@ -8,7 +8,7 @@ import Skeleton from "./Skeleton";
 import { useAuth } from "../lib/auth";
 import { supabase, friendlyError, fmtDate } from "../lib/supabase";
 import { haversineKm, openSeats, TRANSPORT_MODES } from "../lib/matching";
-import { CHICAGO_NOTICE, mergeDemoTrips } from "../lib/demo";
+import { mergeDemoTrips } from "../lib/demo";
 
 const emptyDraft = {
   pickup: null,
@@ -289,7 +289,6 @@ export default function ExploreBoard() {
           </form>
 
           <div className="explore-rail">
-            {showResults && trips.some((trip) => trip.is_chicago) && <p className="alert alert-info">{CHICAGO_NOTICE}</p>}
             {authLoading || loading ? (
               <Skeleton rows={3} />
             ) : error ? (

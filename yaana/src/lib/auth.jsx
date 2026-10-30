@@ -24,6 +24,14 @@ async function readProfile(userId) {
 
   const extra = await supabase.from("profiles").select("theme, preferred_departure").eq("id", userId).maybeSingle();
   if (extra.error) return { profile: core.data, schemaReady: false, schemaGap: "theme" };
+  const matches = await supabase.from("trip_matches").select("id").limit(1);
+  if (matches.error && /trip_matches|schema cache|does not exist|could not find the table/i.test(matches.error.message || "")) {
+    return { profile: { ...core.data, ...extra.data }, schemaReady: false, schemaGap: "matches" };
+  }
+  const settings = await supabase.from("app_settings").select("key").eq("key", "registration_mode").maybeSingle();
+  if (settings.error && /app_settings|schema cache|does not exist|could not find the table/i.test(settings.error.message || "")) {
+    return { profile: { ...core.data, ...extra.data }, schemaReady: false, schemaGap: "registration" };
+  }
   return { profile: { ...core.data, ...extra.data }, schemaReady: true, schemaGap: "" };
 }
 

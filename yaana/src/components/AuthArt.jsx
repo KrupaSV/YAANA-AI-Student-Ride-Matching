@@ -15,7 +15,7 @@ export default function AuthArt() {
     <svg
       className="auth-art"
       viewBox="0 0 800 1100"
-      preserveAspectRatio="xMidYMid slice"
+      preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label="Simple illustration of students waiting beside a green-and-yellow auto."
     >

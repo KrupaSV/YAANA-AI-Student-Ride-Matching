@@ -217,7 +217,7 @@ export default function TravelMap({
     ? (emptyHint || "Choose a pickup and destination to see the driving route.")
     : !overlay && displayRoute.length < 2 && (displayOrigin || displayDrop || listingCount)
       ? (useExample
-        ? "This is an example map of Bengaluru streets. A driving line appears when the routing service answers."
+        ? "This is a Chicago street map. A driving line appears when the routing service answers."
         : listingCount && !displayOrigin
           ? "Select a published trip to inspect its saved driving route."
           : "A driving line appears after the routing service returns road geometry. YAANA will not draw a straight-line guess.")

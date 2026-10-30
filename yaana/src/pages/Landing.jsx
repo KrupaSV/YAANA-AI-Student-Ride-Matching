@@ -8,12 +8,15 @@ import HowSteps from "../components/HowSteps";
 import ExploreBoard from "../components/ExploreBoard";
 import YaanaMarquee from "../components/YaanaMarquee";
 import { useAuth } from "../lib/auth";
+import { isTestingRegistration } from "../lib/validation";
 import { useTitle } from "../lib/useTitle";
 
 const faqs = [
   [
     "Who can join YAANA?",
-    "Registration currently accepts exact addresses from configured eligible domains, beginning with @dsu.edu.in. An allowed domain starts the process; it is not a university roster check. Matching stays closed until the confirmation link establishes a confirmed session.",
+    isTestingRegistration()
+      ? "Temporary testing mode accepts any valid email. Opening the confirmation link is still required before matching. Production registration returns to approved college domains, beginning with @dsu.edu.in."
+      : "Registration currently accepts exact addresses from configured eligible domains, beginning with @dsu.edu.in. An allowed domain starts the process; it is not a university roster check. Matching stays closed until the confirmation link establishes a confirmed session.",
     "🎓",
   ],
   [
@@ -38,7 +41,7 @@ const faqs = [
   ],
   [
     "Does YAANA guarantee a perfect match?",
-    "No. Road overlap, departure gap, estimated detour, open seats, and a model trained on real Chicago rideshare trips are checks, not a promise. Hard constraints such as no remaining seats still win.",
+    "No. Road overlap, departure gap, estimated detour, open seats, and a Chicago rule score from real Chicago rideshare trips are checks, not a promise. That score is not the chance two DSU students will share a ride. Hard constraints such as no remaining seats still win.",
     "🎯",
   ],
   [

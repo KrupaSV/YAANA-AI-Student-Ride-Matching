@@ -1,15 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import PageBanner from "../components/PageBanner";
-import { supabase, friendlyError } from "../lib/supabase";
+import { supabase, friendlyError, toDatetimeLocal } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { TRANSPORT_MODES } from "../lib/matching";
 import {
-  CHICAGO_NOTICE,
   demoRequests,
   demoRevealEmail,
   demoRequestSeat,
   demoRunAction,
+  demoUpdateTrip,
   isDemoRecord,
   mergeDemoTrips,
 } from "../lib/demo";
@@ -48,6 +48,7 @@ export default function Trips() {
   const [selected, setSelected] = useState(null);
   const [draft, setDraft] = useState(null);
   const [note, setNote] = useState("");
+  const draftCard = useRef(null);
 
   async function load() {
     setLoading(true);
@@ -75,6 +76,28 @@ export default function Trips() {
   }
 
   useEffect(() => { load(); }, [user.id, profile?.full_name]);
+
+  useEffect(() => {
+    if (draft && draftCard.current) {
+      draftCard.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [draft?.id]);
+
+  function startEdit(trip) {
+    setSelected(null);
+    setError("");
+    setStatus("");
+    setDraft({
+      id: trip.id,
+      origin_name: trip.origin_name,
+      destination_name: trip.destination_name,
+      departure_at: toDatetimeLocal(trip.departure_at),
+      seats_available: Number(trip.seats_available) || 1,
+      transport_mode: trip.transport_mode,
+      preferences: trip.preferences || "",
+      is_demo: trip.is_demo,
+    });
+  }
 
   function matches(trip) {
     const text = `${trip.origin_name} ${trip.destination_name}`.toLowerCase();
@@ -175,16 +198,55 @@ export default function Trips() {
     event.preventDefault();
     setBusy(draft.id);
     setError("");
-    const { error: updateError } = await supabase.from("trips").update({
-      departure_at: new Date(draft.departure_at).toISOString(),
-      seats_available: Number(draft.seats_available),
+    setStatus("");
+    const when = new Date(draft.departure_at);
+    const seats = Number(draft.seats_available);
+    if (Number.isNaN(when.getTime()) || when <= new Date()) {
+      setBusy("");
+      setError("Choose a departure time in the future.");
+      toast("Choose a departure time in the future.", "error");
+      return;
+    }
+    if (!Number.isInteger(seats) || seats < 1 || seats > 6) {
+      setBusy("");
+      setError("Seats must be between 1 and 6.");
+      toast("Seats must be between 1 and 6.", "error");
+      return;
+    }
+    const patch = {
+      departure_at: when.toISOString(),
+      seats_available: seats,
       transport_mode: draft.transport_mode,
-      preferences: draft.preferences || null,
-    }).eq("id", draft.id);
+      preferences: String(draft.preferences || "").trim() || null,
+    };
+    if (isDemoRecord(draft) || String(draft.id).startsWith("chi-")) {
+      const result = demoUpdateTrip(draft.id, user.id, profile?.full_name, patch);
+      setBusy("");
+      if (result.error) {
+        setError(result.error);
+        toast(result.error, "error");
+      } else {
+        setStatus("Trip details saved.");
+        toast("Trip details saved.", "success");
+        setDraft(null);
+        await load();
+      }
+      return;
+    }
+    const { data, error: updateError } = await supabase
+      .from("trips")
+      .update(patch)
+      .eq("id", draft.id)
+      .eq("user_id", user.id)
+      .select("id")
+      .maybeSingle();
     setBusy("");
     if (updateError) {
       setError(friendlyError(updateError));
       toast(friendlyError(updateError), "error");
+    } else if (!data) {
+      setError("The trip could not be updated.");
+      toast("The trip could not be updated.", "error");
     } else {
       setStatus("Trip details saved.");
       toast("Trip details saved.", "success");
@@ -225,22 +287,55 @@ export default function Trips() {
           <option value="completed">Completed</option>
         </select>
       </div>
-      {(trips.some((trip) => trip.is_chicago) || available.some((trip) => trip.is_chicago)) && <p className="alert alert-info">{CHICAGO_NOTICE}</p>}
       {error && <p className="alert alert-error" role="alert">{error}</p>}
       {status && <p className="alert alert-success" role="status">{status}</p>}
       {loading ? <Skeleton /> : tab === "mine" ? (
         visibleMine.length === 0 ? <EmptyState eyebrow="Empty" title="No trips match these filters." body="Create a trip when you know the route and departure time." to="/create-trip" action="Create a trip" /> : visibleMine.map((trip) => (
-          <BookingCard key={trip.id} trip={trip}>
-            <div className="row">
-              <button className="btn btn-secondary" type="button" onClick={() => setSelected(trip)}>Details</button>
-              {trip.status === "open" && (
-                <button className="btn btn-secondary" type="button" onClick={() => setDraft({ ...trip, departure_at: trip.departure_at.slice(0, 16) })}>Edit details</button>
+          <div key={trip.id} ref={draft?.id === trip.id ? draftCard : null}>
+            <BookingCard trip={trip}>
+              {draft?.id === trip.id ? (
+                <form className="trip-edit" onSubmit={saveDraft}>
+                  <p className="muted">The saved road route stays as published. Change the time, seats, mode, or note.</p>
+                  <label className="field">
+                    <span>Departure</span>
+                    <input type="datetime-local" value={draft.departure_at} onChange={(event) => setDraft({ ...draft, departure_at: event.target.value })} required />
+                  </label>
+                  <div className="pair">
+                    <label className="field">
+                      <span>Seats</span>
+                      <select value={draft.seats_available} onChange={(event) => setDraft({ ...draft, seats_available: Number(event.target.value) })}>
+                        {[1, 2, 3, 4, 5, 6].map((seat) => <option key={seat} value={seat}>{seat}</option>)}
+                      </select>
+                    </label>
+                    <label className="field">
+                      <span>Transport</span>
+                      <select value={draft.transport_mode} onChange={(event) => setDraft({ ...draft, transport_mode: event.target.value })}>
+                        {TRANSPORT_MODES.map((item) => <option key={item}>{item}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  <label className="field">
+                    <span>Note</span>
+                    <textarea value={draft.preferences || ""} maxLength="280" onChange={(event) => setDraft({ ...draft, preferences: event.target.value })} />
+                  </label>
+                  <div className="row">
+                    <button className="btn btn-primary" disabled={busy === draft.id}>{busy === draft.id ? "Saving…" : "Save changes"}</button>
+                    <button className="btn btn-ghost" type="button" onClick={() => setDraft(null)}>Cancel</button>
+                  </div>
+                </form>
+              ) : (
+                <div className="row">
+                  <button className="btn btn-secondary" type="button" onClick={() => setSelected(trip)}>Details</button>
+                  {trip.status === "open" && (
+                    <button className="btn btn-secondary" type="button" onClick={() => startEdit(trip)}>Edit details</button>
+                  )}
+                  {trip.status !== "cancelled" && (
+                    <button className="btn btn-ghost" type="button" disabled={busy === trip.id} onClick={() => run(trip.id, "cancel_trip")}>Cancel listing</button>
+                  )}
+                </div>
               )}
-              {trip.status !== "cancelled" && (
-                <button className="btn btn-ghost" type="button" disabled={busy === trip.id} onClick={() => run(trip.id, "cancel_trip")}>Cancel listing</button>
-              )}
-            </div>
-          </BookingCard>
+            </BookingCard>
+          </div>
         ))
       ) : tab === "available" ? (
         visibleAvailable.length === 0 ? <EmptyState eyebrow="No trips" title="No open trips match this search." body="There are no other future trips in the database for these filters." to="/create-trip" action="Create a trip" /> : (
@@ -301,25 +396,6 @@ export default function Trips() {
         </>
       )}
       {selected && tab === "mine" && <RoutePreview trip={selected} />}
-      {draft && (
-        <form className="card form-grid" onSubmit={saveDraft}>
-          <h2>Update {draft.origin_name} → {draft.destination_name}</h2>
-          <p className="muted">The saved road route stays as published. Change the time, seats, mode, or note.</p>
-          <label className="field"><span>Departure</span><input type="datetime-local" value={draft.departure_at} onChange={(event) => setDraft({ ...draft, departure_at: event.target.value })} required /></label>
-          <label className="field"><span>Seats</span><input type="number" min="1" max="6" value={draft.seats_available} onChange={(event) => setDraft({ ...draft, seats_available: event.target.value })} required /></label>
-          <label className="field">
-            <span>Transport</span>
-            <select value={draft.transport_mode} onChange={(event) => setDraft({ ...draft, transport_mode: event.target.value })}>
-              {TRANSPORT_MODES.map((item) => <option key={item}>{item}</option>)}
-            </select>
-          </label>
-          <label className="field"><span>Note</span><textarea value={draft.preferences || ""} onChange={(event) => setDraft({ ...draft, preferences: event.target.value })} /></label>
-          <div className="row">
-            <button className="btn btn-primary" disabled={busy === draft.id}>{busy === draft.id ? "Saving…" : "Save changes"}</button>
-            <button className="btn btn-ghost" type="button" onClick={() => setDraft(null)}>Cancel</button>
-          </div>
-        </form>
-      )}
     </>
   );
 }

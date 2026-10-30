@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { supabase, friendlyError, fmtDate, initials } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { validateName } from "../lib/validation";
+import { isTestingRegistration, validateName } from "../lib/validation";
 import { TRANSPORT_MODES } from "../lib/matching";
 import { useTitle } from "../lib/useTitle";
 import PageBanner from "../components/PageBanner";
 
 const labels = {
-  verified: "Email confirmed for an allowed domain",
+  verified: isTestingRegistration() ? "Email confirmed" : "Email confirmed for an allowed domain",
   pending: "Waiting for the confirmation link",
-  unverified: "This domain is not on the allowed list",
+  unverified: isTestingRegistration() ? "This email is not verified yet" : "This domain is not on the allowed list",
 };
 
 export default function Profile() {
