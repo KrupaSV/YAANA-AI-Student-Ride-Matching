@@ -39,4 +39,6 @@ Krupa Laxmi S V
 
 BCA Student | Dayananda Sagar University
 
+## Website Preview
 
+![YAANA Website Overview](screenshots/yaana-website-overview.png)
