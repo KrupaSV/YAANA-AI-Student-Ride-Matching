@@ -1,6 +1,6 @@
 # YAANA 2.0
 
-Campus ride matching for confirmed Dayananda Sagar University students. The React app is in this folder. The matcher is trained on City of Chicago rideshare trips, documented in `ml/README.md`.
+Campus ride matching for confirmed Dayananda Sagar University students. The React app uses saved road routes and compatibility rules to compare student trips.
 
 ## Run the website
 
@@ -12,15 +12,17 @@ npm run dev
 
 The site opens at `http://localhost:5173`.
 
-## Run the matching API
+## Run the map API
 
 ```powershell
 cd yaana
-..\.venv\Scripts\python.exe -m pip install -r ml\requirements.txt
-..\.venv\Scripts\python.exe -m uvicorn ml_api:app --reload --port 8000
+python -m pip install -r requirements.txt
+python -m uvicorn ml_api:app --reload --port 8000
 ```
 
-Place search, road routes, detours, and Chicago rule scores need this process. Use the virtual environment above so scoring runs on scikit-learn 1.9.1, the version that trained `yaana_model.joblib`. A different scikit-learn install refuses to score and returns that reason. If the process is stopped, those screens show an error instead of a made-up route.
+The API searches a bundled [Bengaluru place catalog](geodata/README.md) and uses OSRM for road routes and detours. Search for **DSU Main Campus**, **Kudlu Gate Metro**, **HSR Layout**, or **Majestic Bus Stand** to try it. Keep the `geodata` directory in the backend deployment alongside `ml_api.py`.
+
+Run the map tests from this directory with `python -m pytest geodata/tests -q`.
 
 ## Environment
 
@@ -100,4 +102,29 @@ Use two browsers, or one normal window and one private window.
 12. Use Forgot password, open the link in the same browser, and set a new password.
 13. Open an old confirmation link, or a link with a broken token, and confirm the expired or invalid state offers a login action.
 
-Map providers: OpenStreetMap tiles, Nominatim search, and the public OSRM demo are for light use. They require attribution, can rate-limit, and are not a production traffic plan.
+Place search uses bundled OpenStreetMap data and does not call a remote geocoder. The OpenStreetMap basemap and public OSRM routing demo still need internet access and may throttle traffic.
+
+## Seed demo rides and logins
+
+Use a Supabase demo project with the YAANA schema applied and registration mode already set to `testing`. Seed logins belong to fictional students and can read other open rides in that project, so use a database reserved for test data.
+
+Start the map API, then preview the route geometry from the app directory.
+
+```powershell
+node scripts/seed-demo.mjs --preview
+```
+
+Put the demo project URL, publishable key, and server-side secret or service-role key in an ignored `.env.demo.local` file as `YAANA_DEMO_SUPABASE_URL`, `YAANA_DEMO_PUBLISHABLE_KEY`, and `YAANA_DEMO_ADMIN_KEY`. Set `YAANA_DEMO_MAP_URL` if the map API is running at a different URL. Keep the admin key out of all `VITE_` variables.
+
+```powershell
+node --env-file=.env.demo.local scripts/seed-demo.mjs
+```
+
+The script creates three confirmed demo logins and publishes four trips for the next day in Bengaluru. Two Cab trips from HSR Layout depart eight minutes apart so the normal Matches page can discover the pair. The script stores the generated IDs and passwords in an ignored `.yaana-demo-<project-hostname>.local` file and reuses them on later runs. The IDs are the login email addresses.
+
+If you create the demo users through **Authentication → Users** with auto-confirm enabled, use the public configuration in `.env.local`. Run the first command to generate the credentials, create the users with those credentials, then run the second command to publish the rides through those accounts.
+
+```powershell
+node --env-file=.env.local scripts/seed-demo.mjs --prepare-logins
+node --env-file=.env.local scripts/seed-demo.mjs --existing-users
+```

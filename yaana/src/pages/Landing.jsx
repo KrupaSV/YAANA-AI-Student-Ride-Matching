@@ -38,7 +38,7 @@ const faqs = [
   ],
   [
     "Does YAANA guarantee a perfect match?",
-    "No. Road overlap, departure gap, estimated detour, open seats, and a Chicago rule score from real Chicago rideshare trips are checks, not a promise. That score is not the chance two DSU students will share a ride. Hard constraints such as no remaining seats still win.",
+    "YAANA compares departure times, available seats, transport mode and saved road routes. Both students decide whether to accept a suggested match.",
     "🎯",
   ],
   [

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { supabase, friendlyError } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { TRANSPORT_MODES } from "../lib/matching";
-import { demoRequestSeat, demoRequests, isDemoRecord, mergeDemoTrips } from "../lib/demo";
 import { useTitle } from "../lib/useTitle";
 import { useToast } from "../components/Toast";
 import BookingCard from "../components/BookingCard";
@@ -12,7 +11,7 @@ import MapPicker from "../components/MapPicker";
 
 export default function FindRides() {
   useTitle("Find a ride");
-  const { user, profile, verified } = useAuth();
+  const { user, verified } = useAuth();
   const toast = useToast();
   const [trips, setTrips] = useState([]);
   const [asked, setAsked] = useState({});
@@ -43,15 +42,12 @@ export default function FindRides() {
       .in("status", ["pending", "accepted"]);
     const next = {};
     for (const row of mine || []) next[row.trip_id] = row.status;
-    for (const row of demoRequests(user.id, profile?.full_name).sent) {
-      if (["pending", "accepted"].includes(row.status)) next[row.trip_id] = row.status;
-    }
     setAsked(next);
-    setTrips(mergeDemoTrips(data || [], user.id, profile?.full_name).filter((trip) => trip.user_id !== user.id));
+    setTrips((data || []).filter((trip) => trip.user_id !== user.id));
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [user.id, profile?.full_name]);
+  useEffect(() => { load(); }, [user.id]);
 
   const filtered = trips.filter((trip) => {
     const text = `${trip.origin_name} ${trip.destination_name}`.toLowerCase();
@@ -71,32 +67,6 @@ export default function FindRides() {
       return;
     }
     setBusy(trip.id);
-    if (isDemoRecord(trip)) {
-      const result = demoRequestSeat({
-        userId: user.id,
-        displayName: profile?.full_name,
-        trip,
-        note,
-      });
-      setBusy("");
-      if (result.error) {
-        setError(result.error);
-        toast(result.error, "error");
-      } else {
-        const message = result.reserved
-          ? "Seat reserved on this Chicago test trip."
-          : "Request sent. This is not a reserved seat until the owner accepts it.";
-        setStatus(message);
-        toast(message, "success");
-        setAsked((current) => ({ ...current, [trip.id]: result.reserved ? "accepted" : "pending" }));
-        if (result.reserved) {
-          setTrips((current) => current.map((row) => (
-            row.id === trip.id ? { ...row, seats_taken: result.seats_taken, status: result.status } : row
-          )));
-        }
-      }
-      return;
-    }
     const { error: insertError } = await supabase.from("ride_requests").insert({
       trip_id: trip.id,
       requester_id: user.id,

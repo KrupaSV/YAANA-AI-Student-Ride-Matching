@@ -19,15 +19,11 @@ export default function Help() {
         </article>
         <article className="card">
           <h2>Maps</h2>
-          <p>Tiles and place names come from OpenStreetMap and Nominatim. Driving geometry comes from the public OSRM demo. All three can rate-limit or fail. When they fail, the page shows the error and does not invent a route. Production traffic should move to a dedicated tile and geocoding provider.</p>
+          <p>Pickup and destination search covers Bengaluru and the commute area around DSU’s Harohalli campus. Search by locality, station, bus stop or landmark. You can also drop a pin if a place is missing. Place data and streets are from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>. OSRM calculates the driving route.</p>
         </article>
         <article className="card">
           <h2>Matching</h2>
-          <p>After a trip is published, YAANA compares it with other students' open trips in Supabase. A match needs the same travel date, a departure gap of about 30 minutes, nearby pickups or overlapping saved routes, nearby destinations, the same transport mode, and open seats. Both students see the match, get a notification, and accept or decline on their own. The ride is confirmed only after both accept. Chicago board listings are not used as student matches.</p>
-        </article>
-        <article className="card">
-          <h2>The model</h2>
-          <p>The Chicago rule score comes from a scikit-learn Random Forest trained on real Chicago rideshare trips from the City of Chicago open data for 25 October 2019. A pair is labeled shareable when the recorded pickups are within 0.8 km, the drop-offs within 1 km, and the starts within 30 minutes. That file does not name which riders shared a car, and the score is not the probability that two DSU students will share a ride. The score is hidden when the departure gap is above 45 minutes, because that is outside the training file. Every training pair used the same transport mode, so the model is not a transport-compatibility judge. Trip length in the training file is miles; the app keeps kilometres and converts only that one feature before scoring.</p>
+          <p>After a trip is published, YAANA compares it with other students' open trips in Supabase. A match needs the same travel date, a departure gap of about 30 minutes, nearby pickups or overlapping saved routes, nearby destinations, the same transport mode, and open seats. Both students see the match, get a notification, and accept or decline on their own. The ride is confirmed only after both accept.</p>
         </article>
         <article className="card">
           <h2>Safety</h2>

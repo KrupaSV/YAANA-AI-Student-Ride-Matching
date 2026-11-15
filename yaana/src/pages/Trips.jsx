@@ -4,15 +4,6 @@ import PageBanner from "../components/PageBanner";
 import { supabase, friendlyError, toDatetimeLocal } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { TRANSPORT_MODES } from "../lib/matching";
-import {
-  demoRequests,
-  demoRevealEmail,
-  demoRequestSeat,
-  demoRunAction,
-  demoUpdateTrip,
-  isDemoRecord,
-  mergeDemoTrips,
-} from "../lib/demo";
 import { useTitle } from "../lib/useTitle";
 import { useToast } from "../components/Toast";
 import BookingCard from "../components/BookingCard";
@@ -28,7 +19,7 @@ const tabs = [
 
 export default function Trips() {
   useTitle("Trips");
-  const { user, profile, verified } = useAuth();
+  const { user, verified } = useAuth();
   const location = useLocation();
   const toast = useToast();
   const [tab, setTab] = useState("mine");
@@ -60,22 +51,16 @@ export default function Trips() {
       supabase.from("trips").select("*").in("status", ["open", "full"]).gt("departure_at", now).order("departure_at", { ascending: true }).limit(100),
     ]);
     const problem = mine.error || outgoing.error || incoming.error || openTrips.error;
-    const allTrips = mergeDemoTrips(
-      [...(mine.data || []), ...(openTrips.data || [])],
-      user.id,
-      profile?.full_name,
-    );
-    const demo = demoRequests(user.id, profile?.full_name);
     if (problem) setError(friendlyError(problem));
     else setError("");
-    setTrips(allTrips.filter((trip) => trip.user_id === user.id));
-    setAvailable(allTrips.filter((trip) => trip.user_id !== user.id && ["open", "full"].includes(trip.status) && new Date(trip.departure_at) > new Date()));
-    setSent([...(outgoing.data || []), ...demo.sent]);
-    setReceived([...(incoming.data || []), ...demo.received]);
+    setTrips(mine.data || []);
+    setAvailable((openTrips.data || []).filter((trip) => trip.user_id !== user.id));
+    setSent(outgoing.data || []);
+    setReceived(incoming.data || []);
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [user.id, profile?.full_name]);
+  useEffect(() => { load(); }, [user.id]);
 
   useEffect(() => {
     if (draft && draftCard.current) {
@@ -95,7 +80,6 @@ export default function Trips() {
       seats_available: Number(trip.seats_available) || 1,
       transport_mode: trip.transport_mode,
       preferences: trip.preferences || "",
-      is_demo: trip.is_demo,
     });
   }
 
@@ -112,20 +96,6 @@ export default function Trips() {
     setBusy(id);
     setError("");
     setStatus("");
-    const demoTarget = [...trips, ...available, ...sent, ...received].find((row) => row.id === id);
-    if (isDemoRecord(demoTarget) || sent.some((row) => row.id === id && isDemoRecord(row)) || received.some((row) => row.id === id && isDemoRecord(row))) {
-      const result = demoRunAction(fn, id, user.id, profile?.full_name);
-      setBusy("");
-      if (result.error) {
-        setError(result.error);
-        toast(result.error, "error");
-      } else {
-        setStatus(result.message);
-        toast(result.message, "success");
-        await load();
-      }
-      return;
-    }
     const args = fn === "cancel_trip" ? { p_trip_id: id } : { p_request_id: id };
     const { error: rpcError } = await supabase.rpc(fn, args);
     setBusy("");
@@ -141,13 +111,6 @@ export default function Trips() {
   }
 
   async function reveal(id) {
-    const demoRow = [...sent, ...received].find((row) => row.id === id);
-    if (isDemoRecord(demoRow)) {
-      const result = demoRevealEmail(id);
-      if (result.error) setError(result.error);
-      else setEmails((current) => ({ ...current, [id]: result.email }));
-      return;
-    }
     const { data, error: rpcError } = await supabase.rpc("reveal_participant_email", { p_request_id: id });
     if (rpcError) setError(friendlyError(rpcError));
     else setEmails((current) => ({ ...current, [id]: data }));
@@ -161,22 +124,6 @@ export default function Trips() {
       return;
     }
     setBusy(trip.id);
-    if (isDemoRecord(trip)) {
-      const result = demoRequestSeat({ userId: user.id, displayName: profile?.full_name, trip, note });
-      setBusy("");
-      if (result.error) {
-        setError(result.error);
-        toast(result.error, "error");
-      } else {
-        const message = result.reserved
-          ? "Seat reserved on this Chicago test trip."
-          : "Request sent. This is not a reserved seat until the owner accepts it.";
-        setStatus(message);
-        toast(message, "success");
-        await load();
-      }
-      return;
-    }
     const { error: insertError } = await supabase.from("ride_requests").insert({
       trip_id: trip.id,
       requester_id: user.id,
@@ -219,20 +166,6 @@ export default function Trips() {
       transport_mode: draft.transport_mode,
       preferences: String(draft.preferences || "").trim() || null,
     };
-    if (isDemoRecord(draft) || String(draft.id).startsWith("chi-")) {
-      const result = demoUpdateTrip(draft.id, user.id, profile?.full_name, patch);
-      setBusy("");
-      if (result.error) {
-        setError(result.error);
-        toast(result.error, "error");
-      } else {
-        setStatus("Trip details saved.");
-        toast("Trip details saved.", "success");
-        setDraft(null);
-        await load();
-      }
-      return;
-    }
     const { data, error: updateError } = await supabase
       .from("trips")
       .update(patch)
@@ -366,7 +299,7 @@ export default function Trips() {
             {sent.length === 0 ? <p className="muted">You have not requested a seat.</p> : sent.filter((request) => !search || `${request.trips?.origin_name} ${request.trips?.destination_name}`.toLowerCase().includes(search.toLowerCase())).map((request) => (
               <article className="trip-card" key={request.id}>
                 <strong>{request.trips?.origin_name} → {request.trips?.destination_name}</strong>
-                <p className="muted">Status: {request.status}. {request.status === "accepted" ? (request.trips?.is_chicago ? "Seat reserved on this Chicago test trip." : "The owner accepted this seat.") : "Not reserved yet."}</p>
+                <p className="muted">Status: {request.status}. {request.status === "accepted" ? "The owner accepted this seat." : "Not reserved yet."}</p>
                 {["pending", "accepted"].includes(request.status) && (
                   <button className="btn btn-secondary" type="button" disabled={busy === request.id} onClick={() => run(request.id, "cancel_ride_request")}>Cancel request</button>
                 )}

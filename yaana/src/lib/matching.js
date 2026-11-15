@@ -43,10 +43,6 @@ export function routeOverlapPercent(routeA, routeB, thresholdKm = 0.4) {
   return Number((((shareNear(a, b) + shareNear(b, a)) / 2) * 100).toFixed(1));
 }
 
-export function simplifyRoute(route, maxPoints = 120) {
-  return sampleRoute(route, maxPoints);
-}
-
 export function minutesApart(a, b) {
   return Math.abs(new Date(a).getTime() - new Date(b).getTime()) / 60000;
 }

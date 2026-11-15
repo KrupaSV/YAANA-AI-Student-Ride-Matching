@@ -155,7 +155,7 @@ export default function Matches() {
           title={mine.length === 0 ? "Create a trip before matching." : "No compatible classmates yet."}
           body={mine.length === 0
             ? "Matching starts after you publish a trip with a pickup, destination, and departure time."
-            : "YAANA will keep looking when another student publishes a similar route on the same date, around the same time. Chicago board listings are not used as student matches."}
+            : "YAANA will keep looking when another student publishes a similar route on the same date, around the same time."}
           to="/create-trip"
           action="Create a trip"
         />

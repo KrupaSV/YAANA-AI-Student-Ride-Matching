@@ -1,23 +1,5 @@
-import { fetchRoute } from "./api";
-import { simplifyRoute } from "./matching";
-
 export const DEFAULT_CENTER = [12.89, 77.64];
 export const DEFAULT_ZOOM = 12;
-
-export const EXAMPLE_PICKUP = {
-  lat: 41.87887,
-  lng: -87.62519,
-  label: "The Loop",
-};
-
-export const EXAMPLE_DROP = {
-  lat: 41.92269,
-  lng: -87.64949,
-  label: "Lincoln Park",
-};
-
-let exampleCache;
-let exampleRequest;
 
 export function asLatLng(value) {
   if (!value) return null;
@@ -50,38 +32,4 @@ export function placeFromQuery(query) {
 export function asRoute(value) {
   if (!Array.isArray(value)) return [];
   return value.map(asLatLng).filter(Boolean);
-}
-
-export function loadExampleRoute() {
-  if (exampleCache) return Promise.resolve(exampleCache);
-  if (!exampleRequest) {
-    exampleRequest = fetchRoute(
-      [EXAMPLE_PICKUP.lat, EXAMPLE_PICKUP.lng],
-      [EXAMPLE_DROP.lat, EXAMPLE_DROP.lng],
-    )
-      .then((body) => {
-        const geometry = simplifyRoute(body.geometry);
-        exampleCache = {
-          ok: geometry.length > 1,
-          geometry,
-          distanceKm: body.distance_km,
-          durationMin: body.duration_min,
-          provider: body.provider || "OSRM",
-          error: geometry.length > 1 ? "" : "The routing service returned no road geometry.",
-        };
-        return exampleCache;
-      })
-      .catch((err) => {
-        exampleRequest = null;
-        return {
-          ok: false,
-          geometry: [],
-          distanceKm: null,
-          durationMin: null,
-          provider: "",
-          error: err.message || "The routing service is not available.",
-        };
-      });
-  }
-  return exampleRequest;
 }

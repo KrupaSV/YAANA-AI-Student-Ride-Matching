@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase, fmtDate, friendlyError } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { mergeDemoTrips } from "../lib/demo";
 import { useTitle } from "../lib/useTitle";
 import EmptyState from "../components/EmptyState";
 import Skeleton from "../components/Skeleton";
@@ -44,22 +43,17 @@ export default function Dashboard() {
           .limit(5),
       ]);
       if (!active) return;
-      const allTrips = mergeDemoTrips(
-        [...(mine.error ? [] : mine.data || []), ...(openTrips.error ? [] : openTrips.data || [])],
-        user.id,
-        profile?.full_name,
-      );
       if (mine.error) setError(friendlyError(mine.error));
-      setTrips(allTrips.filter((trip) => trip.user_id === user.id));
+      setTrips(mine.error ? [] : mine.data || []);
       if (incoming.error) setError(friendlyError(incoming.error));
       else setRequests(incoming.data || []);
-      setCandidates(allTrips.filter((trip) => trip.user_id !== user.id && !trip.is_chicago && trip.status === "open").slice(0, 6));
+      setCandidates(openTrips.error ? [] : openTrips.data || []);
       setPendingMatches(matches.error ? [] : matches.data || []);
       setLoading(false);
     }
     load();
     return () => { active = false; };
-  }, [user, profile?.full_name]);
+  }, [user]);
 
   const name = (profile?.full_name || user?.user_metadata?.full_name || "").trim().split(/\s+/)[0];
   const upcoming = trips.filter((trip) => new Date(trip.departure_at) >= new Date() && trip.status !== "cancelled");

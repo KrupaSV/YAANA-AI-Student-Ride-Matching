@@ -64,19 +64,9 @@ function usesPlace(place, query) {
   return !typed || typed === place.label;
 }
 
-function isChicagoCoordinate(lat, lng) {
-  const latitude = Number(lat);
-  const longitude = Number(lng);
-  return latitude >= 41.6 && latitude <= 42.1 && longitude >= -88.0 && longitude <= -87.5;
-}
-
 function isAvailableStudentTrip(trip) {
   if (!trip?.id) return false;
-  if (trip.is_chicago || trip.is_demo) return false;
-  if (String(trip.id).startsWith("chi-")) return false;
   if (trip.status !== "open") return false;
-  if (isChicagoCoordinate(trip.origin_lat, trip.origin_lng)) return false;
-  if (isChicagoCoordinate(trip.destination_lat, trip.destination_lng)) return false;
   const departure = new Date(trip.departure_at).getTime();
   if (!Number.isFinite(departure) || departure <= Date.now()) return false;
   return openSeats(trip) > 0;
@@ -286,7 +276,6 @@ export default function ExploreBoard() {
             <TravelMap
               compact
               quiet
-              preview={false}
               origin={selected ? [selected.origin_lat, selected.origin_lng] : null}
               destination={selected ? [selected.destination_lat, selected.destination_lng] : null}
               route={selected?.route_geometry || []}
@@ -311,7 +300,7 @@ export default function ExploreBoard() {
               placeholder="Search a pickup"
               value={draft.pickup}
               onSelect={(place) => updateDraft({ pickup: place, pickupQuery: place?.label || "" })}
-              onQuery={(query) => updateDraft({ pickupQuery: query })}
+              onQuery={(query) => updateDraft({ pickup: null, pickupQuery: query })}
             />
             <LocationSearch
               key={`destination-${filterKey}`}
@@ -319,7 +308,7 @@ export default function ExploreBoard() {
               placeholder="Search a drop"
               value={draft.destination}
               onSelect={(place) => updateDraft({ destination: place, destQuery: place?.label || "" })}
-              onQuery={(query) => updateDraft({ destQuery: query })}
+              onQuery={(query) => updateDraft({ destination: null, destQuery: query })}
             />
             <label className="field">
               <span>When</span>

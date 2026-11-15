@@ -15,7 +15,7 @@ export async function loadOpenStudentTrips(userId) {
     .gt("departure_at", now)
     .order("departure_at", { ascending: true });
   if (error) return { trips: [], error };
-  const rows = (data || []).filter((trip) => !String(trip.id).startsWith("chi-") && !trip.is_chicago);
+  const rows = data || [];
   return {
     mine: rows.filter((trip) => trip.user_id === userId),
     others: rows.filter((trip) => trip.user_id !== userId),

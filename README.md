@@ -17,17 +17,11 @@ YAANA aims to connect students travelling along similar routes, helping them fin
 - Driver registration and approval
 - Admin dashboard
 
-## Technology Stack
+## Map and Matching
 
-**Frontend:** React.js, JavaScript, HTML, CSS
+The React and Leaflet map uses a Bengaluru OpenStreetMap place catalog served by FastAPI. OSRM supplies driving directions. Supabase stores student trips and handles authentication. YAANA matches published trips using departure time, transport mode, seat availability and road overlap.
 
-**Backend:** Python, FastAPI
-
-**Database and Authentication:** Supabase
-
-**Machine Learning:** Python, Scikit-learn
-
-**Development Tools:** Cursor, VS Code, Git, GitHub
+See the [app setup](yaana/README.md) and [Bengaluru place catalog](yaana/geodata/README.md).
 
 ## Project Status
 

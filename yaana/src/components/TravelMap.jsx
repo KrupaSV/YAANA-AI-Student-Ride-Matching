@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   CircleMarker,
   MapContainer,
@@ -17,9 +17,6 @@ import {
   asRoute,
   DEFAULT_CENTER,
   DEFAULT_ZOOM,
-  EXAMPLE_DROP,
-  EXAMPLE_PICKUP,
-  loadExampleRoute,
 } from "../lib/map";
 
 function pin(color, label) {
@@ -35,6 +32,18 @@ function pin(color, label) {
 const pickupIcon = pin("#e78376", "A");
 const dropIcon = pin("#397b98", "B");
 const stopIcon = pin("#386b58", "+");
+function editPin(color, label) {
+  return L.divIcon({
+    className: "yaana-pin is-editable",
+    html: `<span style="--pin-color:${color}" aria-hidden="true">${label}</span>`,
+    iconSize: [42, 44],
+    iconAnchor: [21, 44],
+    popupAnchor: [0, -38],
+  });
+}
+
+const editPickupIcon = editPin("#a64437", "A");
+const editDropIcon = editPin("#246781", "B");
 const NO_STOPS = [];
 const NO_LISTINGS = [];
 
@@ -68,10 +77,13 @@ function ResizeSync() {
 
 function ViewSync({ pointKey, points, reduce, mapRef }) {
   const map = useMap();
+  const previousKey = useRef();
   useEffect(() => {
     mapRef.current = map;
   }, [map, mapRef]);
   useEffect(() => {
+    if (previousKey.current === pointKey) return;
+    previousKey.current = pointKey;
     if (!points.length) {
       map.setView(DEFAULT_CENTER, DEFAULT_ZOOM, { animate: false });
       return;
@@ -146,7 +158,9 @@ export default function TravelMap({
   tileError = false,
   onTileError,
   onPick,
-  preview = false,
+  onMovePin,
+  centerLabel = "Pin at map center",
+  fitKey,
   compact = false,
   interactive,
   listings = NO_LISTINGS,
@@ -157,42 +171,16 @@ export default function TravelMap({
   const reduce = useReducedMotion();
   const mapRef = useRef(null);
   const canPick = interactive ?? Boolean(onPick);
-  const [example, setExample] = useState(null);
-
-  const liveOrigin = asLatLng(origin);
-  const liveDrop = asLatLng(destination);
-  const liveRoute = asRoute(route);
+  const displayOrigin = asLatLng(origin);
+  const displayDrop = asLatLng(destination);
+  const displayRoute = asRoute(route);
   const listingCount = listings.length;
-  const hasLive = Boolean(liveOrigin || liveDrop || liveRoute.length || listingCount);
-  const useExample = preview && !hasLive;
-
-  useEffect(() => {
-    if (!useExample) return undefined;
-    let active = true;
-    loadExampleRoute().then((result) => {
-      if (active) setExample(result);
-    });
-    return () => { active = false; };
-  }, [useExample]);
-
-  const displayOrigin = liveOrigin || (useExample ? [EXAMPLE_PICKUP.lat, EXAMPLE_PICKUP.lng] : null);
-  const displayDrop = liveDrop || (useExample ? [EXAMPLE_DROP.lat, EXAMPLE_DROP.lng] : null);
-  const displayRoute = liveRoute.length ? liveRoute : (example?.ok ? example.geometry : []);
-  const previewStop = useExample && displayRoute.length > 2
-    ? [{
-        lat: displayRoute[Math.floor(displayRoute.length / 2)][0],
-        lng: displayRoute[Math.floor(displayRoute.length / 2)][1],
-        label: "Example shared stop",
-        kind: "shared",
-      }]
-    : NO_STOPS;
-  const displayStops = hasLive ? stops : previewStop;
-  const pickupName = originLabel || origin?.label || (useExample ? EXAMPLE_PICKUP.label : "Pickup");
-  const dropName = destinationLabel || destination?.label || (useExample ? EXAMPLE_DROP.label : "Destination");
-  const km = distanceKm ?? (useExample && example?.ok ? example.distanceKm : null);
-  const minutes = durationMin ?? (useExample && example?.ok ? example.durationMin : null);
-  const isLoading = loading || (useExample && example == null);
-  const exampleFailed = useExample && example && !example.ok;
+  const displayStops = stops;
+  const pickupName = originLabel || origin?.label || "Pickup";
+  const dropName = destinationLabel || destination?.label || "Destination";
+  const km = distanceKm;
+  const minutes = durationMin;
+  const isLoading = loading;
   const missingPoints = !displayOrigin && !displayDrop && listingCount === 0;
   const points = fitPoints(displayOrigin, displayDrop, displayRoute, displayStops, listings);
   const pointKey = points.map((point) => `${point[0].toFixed(5)},${point[1].toFixed(5)}`).join("|");
@@ -204,26 +192,28 @@ export default function TravelMap({
     else map.fitBounds(points, { padding: [36, 36], maxZoom: 16, animate: !reduce });
   }
 
+  function pickCenter() {
+    const center = mapRef.current?.getCenter();
+    if (center) onPick([center.lat, center.lng]);
+  }
+
+  function movePin(endpoint, event) {
+    const { lat, lng } = event.target.getLatLng();
+    onMovePin(endpoint, [lat, lng]);
+  }
+
   const overlay = isLoading
     ? "Calculating the road route…"
     : tileError
       ? "Map tiles could not be loaded. Check the network connection."
-      : exampleFailed
-        ? example.error
-        : error
-          ? error
-          : "";
+      : error;
   const hint = !overlay && missingPoints
     ? (emptyHint || "Choose a pickup and destination to see the driving route.")
     : !overlay && displayRoute.length < 2 && (displayOrigin || displayDrop || listingCount)
-      ? (useExample
-        ? "This is a Chicago street map. A driving line appears when the routing service answers."
-        : listingCount && !displayOrigin
-          ? "Select a published trip to inspect its saved driving route."
-          : "A driving line appears after the routing service returns road geometry. YAANA will not draw a straight-line guess.")
+      ? (listingCount && !displayOrigin
+        ? "Select a published trip to see its saved driving route."
+        : "A driving line appears when the routing service returns a route.")
       : "";
-
-  const routeKind = useExample ? "example" : "live";
 
   return (
     <div className={`map-frame travel-map${compact ? " is-compact" : ""}${quiet ? " is-quiet" : ""}`}>
@@ -235,13 +225,13 @@ export default function TravelMap({
         keyboard
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           eventHandlers={onTileError ? { tileerror: () => onTileError() } : undefined}
         />
         {quiet ? null : <ScaleControl imperial={false} />}
         <ResizeSync />
-        <ViewSync pointKey={pointKey} points={points} reduce={reduce} mapRef={mapRef} />
+        <ViewSync pointKey={fitKey ?? pointKey} points={points} reduce={reduce} mapRef={mapRef} />
         {canPick && onPick ? <ClickLayer onPick={onPick} /> : null}
         {displayRoute.length > 1 && (
           <>
@@ -260,13 +250,19 @@ export default function TravelMap({
               }}
             >
               <Tooltip sticky>
-                {useExample ? "Example driving route" : "Saved driving route"}
+                Driving route
               </Tooltip>
             </Polyline>
           </>
         )}
         {displayOrigin && (
-          <Marker position={displayOrigin} icon={pickupIcon}>
+          <Marker
+            position={displayOrigin}
+            icon={onMovePin ? editPickupIcon : pickupIcon}
+            title="Pickup pin"
+            draggable={Boolean(onMovePin)}
+            eventHandlers={onMovePin ? { dragend: (event) => movePin("pickup", event) } : undefined}
+          >
             <Popup>
               <strong>Pickup</strong>
               <p>{pickupName}</p>
@@ -274,7 +270,13 @@ export default function TravelMap({
           </Marker>
         )}
         {displayDrop && (
-          <Marker position={displayDrop} icon={dropIcon}>
+          <Marker
+            position={displayDrop}
+            icon={onMovePin ? editDropIcon : dropIcon}
+            title="Destination pin"
+            draggable={Boolean(onMovePin)}
+            eventHandlers={onMovePin ? { dragend: (event) => movePin("destination", event) } : undefined}
+          >
             <Popup>
               <strong>Destination</strong>
               <p>{dropName}</p>
@@ -330,13 +332,23 @@ export default function TravelMap({
         })}
       </MapContainer>
 
+      {onMovePin && (
+        <>
+          {canPick && <span className="map-center-target" aria-hidden="true" />}
+          <div className="map-editor-actions">
+            {canPick && <button className="map-fit" type="button" onClick={pickCenter}>{centerLabel}</button>}
+            {points.length > 0 && <button className="map-fit" type="button" onClick={fit}>Fit map</button>}
+          </div>
+        </>
+      )}
+
       {!quiet && (
       <aside className="map-panel" aria-label="Route information">
         <p className="map-kicker">
-          {useExample ? "Example route" : listingCount && !liveOrigin ? "Published trips" : "Route"}
+          {listingCount && !displayOrigin ? "Published trips" : "Route"}
         </p>
         <strong>
-          {liveOrigin || useExample
+          {displayOrigin
             ? `${pickupName} → ${dropName}`
             : listingCount
               ? `${listingCount} published ${listingCount === 1 ? "trip" : "trips"}`
@@ -349,7 +361,7 @@ export default function TravelMap({
         ) : listingCount ? (
           <p>Numbers on markers are open seats. Select a trip to inspect its road.</p>
         ) : (
-          <p>{useExample ? "No driving line until routing answers." : "Waiting for road geometry."}</p>
+          <p>Waiting for road geometry.</p>
         )}
         <button className="map-fit" type="button" onClick={fit} disabled={points.length === 0}>
           Fit map
@@ -361,7 +373,7 @@ export default function TravelMap({
       <ul className="map-legend" aria-label="Map legend">
         <li><i className="map-swatch map-swatch-a" /> Pickup</li>
         <li><i className="map-swatch map-swatch-b" /> Destination</li>
-        <li><i className="map-swatch map-swatch-route" /> {useExample ? "Example road" : "Driving route"}</li>
+        <li><i className="map-swatch map-swatch-route" /> Driving route</li>
         {displayStops.length > 0 && <li><i className="map-swatch map-swatch-stop" /> Shared stop</li>}
         {listingCount > 0 && <li><i className="map-swatch map-swatch-trip" /> Trip pickup · open seats</li>}
       </ul>
@@ -378,16 +390,12 @@ export default function TravelMap({
 
       {!quiet && (
       <p className="map-note">
-        {useExample
-          ? "OpenStreetMap streets. Any line is an example OSRM driving route, not a student trip."
-          : listingCount
-            ? "OpenStreetMap streets. Markers are published trips from the database, not sample listings."
-            : displayRoute.length > 1
-              ? "Roads and place names come from OpenStreetMap. The line is a driving route, not a straight line between the pins."
-              : "Roads and place names come from OpenStreetMap. YAANA only draws a route after the driving service returns geometry."}
+        {listingCount
+          ? "Markers show published trips with open seats."
+          : "Places and streets from OpenStreetMap. Driving directions from OSRM."}
       </p>
       )}
-      <span className="sr-only">{routeKind} map</span>
+      <span className="sr-only">Bengaluru trip map</span>
     </div>
   );
 }

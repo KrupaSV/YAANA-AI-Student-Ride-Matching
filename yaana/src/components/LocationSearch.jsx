@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { searchPlaces } from "../lib/api";
 import { placeFromQuery } from "../lib/map";
 
@@ -9,52 +9,41 @@ export default function LocationSearch({ label, placeholder, value, onSelect, on
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const listId = useId();
-  const request = useRef(0);
+  const selectedLabel = value?.label || "";
 
   useEffect(() => {
-    setQuery(value?.label || "");
-  }, [value?.label]);
+    if (selectedLabel) setQuery(selectedLabel);
+  }, [selectedLabel]);
 
+  const parsed = placeFromQuery(query);
   useEffect(() => {
-    if (query.trim().length < 3 || query === value?.label) {
-      setResults([]);
-      setStatus("");
-      return undefined;
-    }
+    if (query.trim().length < 2 || query === value?.label || placeFromQuery(query)) return undefined;
 
-    const parsed = placeFromQuery(query);
-    if (parsed) {
-      request.current += 1;
-      const same = value && Math.abs(value.lat - parsed.lat) < 1e-5 && Math.abs(value.lng - parsed.lng) < 1e-5;
-      if (!same) onSelect(parsed);
-      setResults([parsed]);
-      setStatus("");
-      setOpen(false);
-      return undefined;
-    }
-
-    const current = ++request.current;
+    const controller = new AbortController();
     const timer = setTimeout(async () => {
       setStatus("Searching places…");
       try {
-        const body = await searchPlaces(query.trim());
-        if (current !== request.current) return;
+        const body = await searchPlaces(query.trim(), controller.signal);
+        if (controller.signal.aborted) return;
         const remote = body.results || [];
         setResults(remote);
-        setOpen(true);
         setActive(-1);
-        setStatus(remote.length ? "" : "No matching places. Try a more specific name, or drop a pin on the map.");
+        setStatus(remote.length ? "" : "No matching Bengaluru places. Try another name or enter coordinates.");
       } catch (error) {
-        if (current !== request.current) return;
+        if (controller.signal.aborted) return;
         setResults([]);
-        setStatus(error.status === 429
-          ? "Place search is cooling down. Wait a second."
-          : error.message);
+        setStatus(error.message);
       }
-    }, 450);
+    }, 200);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [query, value?.label]);
+
+  const options = query === value?.label ? [] : parsed ? [parsed] : results;
+  const expanded = open && options.length > 0;
 
   function choose(place) {
     onSelect(place);
@@ -64,16 +53,19 @@ export default function LocationSearch({ label, placeholder, value, onSelect, on
   }
 
   function onKeyDown(event) {
-    if (!open || !results.length) return;
+    if (!expanded) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setActive((index) => Math.min(index + 1, results.length - 1));
+      setActive((index) => Math.min(index + 1, options.length - 1));
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
       setActive((index) => Math.max(index - 1, 0));
     } else if (event.key === "Enter" && active >= 0) {
       event.preventDefault();
-      choose(results[active]);
+      choose(options[active]);
+    } else if (event.key === "Enter" && parsed) {
+      event.preventDefault();
+      choose(parsed);
     } else if (event.key === "Escape") {
       setOpen(false);
     }
@@ -87,34 +79,46 @@ export default function LocationSearch({ label, placeholder, value, onSelect, on
         value={query}
         placeholder={placeholder}
         role="combobox"
-        aria-expanded={open}
-        aria-controls={`${listId}-list`}
+        aria-expanded={expanded}
+        aria-controls={expanded ? `${listId}-list` : undefined}
+        aria-activedescendant={expanded && active >= 0 ? `${listId}-option-${active}` : undefined}
         aria-autocomplete="list"
+        autoComplete="off"
         onChange={(event) => {
           const next = event.target.value;
           setQuery(next);
+          setResults([]);
+          setStatus("");
+          setActive(-1);
           setOpen(true);
           onQuery?.(next);
         }}
         onKeyDown={onKeyDown}
       />
-      {status && <p className="field-note" role="status">{status}</p>}
-      {open && results.length > 0 && (
-        <ul className="place-list" id={`${listId}-list`} role="listbox">
-          {results.map((place, index) => (
-            <li key={`${place.lat}-${place.lng}-${index}`}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={index === active}
-                className={index === active ? "is-active" : ""}
-                onClick={() => choose(place)}
-              >
-                {place.label}
-              </button>
-            </li>
-          ))}
-        </ul>
+      {open && query !== value?.label && status && <p className="field-note" role="status">{status}</p>}
+      {expanded && (
+        <div className="place-list">
+          <ul id={`${listId}-list`} role="listbox">
+            {options.map((place, index) => (
+              <li key={place.id || `${place.lat}-${place.lng}`} role="presentation">
+                <button
+                  id={`${listId}-option-${index}`}
+                  type="button"
+                  role="option"
+                  aria-selected={index === active}
+                  className={index === active ? "is-active" : ""}
+                  onClick={() => choose(place)}
+                >
+                  {place.label}
+                  {place.kind && <small>{[place.kind, place.locality].filter(Boolean).join(" · ")}</small>}
+                </button>
+              </li>
+            ))}
+          </ul>
+          {!parsed && (
+            <small className="place-credit"><a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a></small>
+          )}
+        </div>
       )}
     </div>
   );

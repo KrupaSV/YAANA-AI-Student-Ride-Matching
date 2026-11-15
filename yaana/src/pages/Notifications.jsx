@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase, fmtDate, friendlyError } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { demoMarkRead, demoNotifications, isDemoRecord } from "../lib/demo";
 import { useTitle } from "../lib/useTitle";
 import EmptyState from "../components/EmptyState";
 import Skeleton from "../components/Skeleton";
 
 export default function Notifications() {
   useTitle("Notifications");
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -16,21 +15,14 @@ export default function Notifications() {
   async function load() {
     setLoading(true);
     const { data, error: queryError } = await supabase.from("notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
-    const demo = demoNotifications(user.id, profile?.full_name);
     if (queryError) setError(friendlyError(queryError));
-    setRows([...(data || []), ...demo]);
+    setRows(data || []);
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [user.id, profile?.full_name]);
+  useEffect(() => { load(); }, [user.id]);
 
   async function markRead(id) {
-    const row = rows.find((item) => item.id === id);
-    if (isDemoRecord(row)) {
-      demoMarkRead(id, user.id);
-      setRows((current) => current.map((item) => item.id === id ? { ...item, read_at: new Date().toISOString() } : item));
-      return;
-    }
     const { error: updateError } = await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", id).eq("user_id", user.id);
     if (updateError) setError(friendlyError(updateError));
     else setRows((current) => current.map((item) => item.id === id ? { ...item, read_at: new Date().toISOString() } : item));

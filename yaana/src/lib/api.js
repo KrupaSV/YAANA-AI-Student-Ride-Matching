@@ -14,12 +14,13 @@ export async function api(path, options = {}) {
     response = await fetch(`${BASE}${path}`, {
       ...options,
       headers: {
-        "Content-Type": "application/json",
+        ...(options.body && { "Content-Type": "application/json" }),
         ...(options.headers || {}),
       },
     });
-  } catch {
-    const error = new Error("The map and matching service is not running.");
+  } catch (cause) {
+    if (options.signal?.aborted) throw cause;
+    const error = new Error("The map service is not running.");
     error.status = 0;
     throw error;
   }
@@ -33,36 +34,23 @@ export async function api(path, options = {}) {
   return body;
 }
 
-export function searchPlaces(query) {
-  return api(`/geo/search?q=${encodeURIComponent(query)}`);
+export function searchPlaces(query, signal) {
+  return api(`/geo/search?q=${encodeURIComponent(query)}`, { signal });
 }
 
 export function reversePlace(lat, lng) {
   return api(`/geo/reverse?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`);
 }
 
-export function fetchRoute(origin, destination) {
+export function fetchRoute(origin, destination, signal) {
   return api("/geo/route", {
     method: "POST",
+    signal,
     body: JSON.stringify({
       origin_lat: origin[0],
       origin_lng: origin[1],
       destination_lat: destination[0],
       destination_lng: destination[1],
     }),
-  });
-}
-
-export function fetchDetour(payload) {
-  return api("/geo/detour", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function predictMatch(payload) {
-  return api("/predict", {
-    method: "POST",
-    body: JSON.stringify(payload),
   });
 }

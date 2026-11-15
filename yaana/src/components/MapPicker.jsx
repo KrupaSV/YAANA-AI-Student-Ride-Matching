@@ -16,8 +16,11 @@ export default function MapPicker({
   tileError,
   onTileError,
   onPick,
+  onMovePin,
+  centerLabel,
+  fitKey,
+  quiet,
   compact,
-  preview,
 }) {
   return (
     <TravelMap
@@ -36,8 +39,11 @@ export default function MapPicker({
       tileError={tileError}
       onTileError={onTileError}
       onPick={onPick}
+      onMovePin={onMovePin}
+      centerLabel={centerLabel}
+      fitKey={fitKey}
+      quiet={quiet}
       compact={compact}
-      preview={preview}
     />
   );
 }

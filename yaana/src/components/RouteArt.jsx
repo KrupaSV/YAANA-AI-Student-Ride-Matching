@@ -17,5 +17,5 @@ export default function RouteArt({ trip }) {
       />
     );
   }
-  return <TravelMap preview compact quiet />;
+  return <TravelMap compact quiet />;
 }
