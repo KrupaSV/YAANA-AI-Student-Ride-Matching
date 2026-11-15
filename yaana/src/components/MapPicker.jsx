@@ -2,6 +2,7 @@ import TravelMap from "./TravelMap";
 
 export default function MapPicker({
   origin,
+  originCharacter,
   destination,
   route = [],
   stops,
@@ -25,6 +26,7 @@ export default function MapPicker({
   return (
     <TravelMap
       origin={origin}
+      originCharacter={originCharacter}
       destination={destination}
       route={route}
       stops={stops}

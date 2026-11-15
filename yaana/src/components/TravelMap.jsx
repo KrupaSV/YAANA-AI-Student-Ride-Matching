@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CircleMarker,
   MapContainer,
@@ -9,6 +9,7 @@ import {
   TileLayer,
   Tooltip,
   useMap,
+  useMapEvent,
 } from "react-leaflet";
 import L from "leaflet";
 import { useReducedMotion } from "framer-motion";
@@ -18,6 +19,7 @@ import {
   DEFAULT_CENTER,
   DEFAULT_ZOOM,
 } from "../lib/map";
+import { DESTINATION_SYMBOL, MEETING_SYMBOL, pickupCharacter } from "../lib/mapCharacters";
 
 function pin(color, label) {
   return L.divIcon({
@@ -29,29 +31,96 @@ function pin(color, label) {
   });
 }
 
-const pickupIcon = pin("#e78376", "A");
-const dropIcon = pin("#397b98", "B");
 const stopIcon = pin("#386b58", "+");
-const matchPickupIcon = pin("#156146", "P");
+const OWN_COLOR = "#195cc3";
+const PEER_COLOR = "#b94721";
+const SHARED_COLOR = "#156146";
 const MATCH_ROUTES = [
-  { key: "ownRoute", label: "Your route", color: "#195cc3", weight: 7 },
-  { key: "peerRoute", label: "Classmate’s route", color: "#b94721", weight: 5, dashArray: "9 8" },
-  { key: "shared", label: "Shared stretch", color: "#156146", weight: 5 },
+  { key: "ownRoute", label: "Your route", color: OWN_COLOR, weight: 7 },
+  { key: "peerRoute", label: "Classmate’s route", color: PEER_COLOR, weight: 5, dashArray: "9 8" },
+  { key: "shared", label: "Shared stretch", color: SHARED_COLOR, weight: 5 },
 ];
-function editPin(color, label) {
+
+function placePin(kind, symbols, color, shift = 0) {
+  const meeting = kind === "meeting";
+  const stemY = meeting ? 12 : -12;
   return L.divIcon({
-    className: "yaana-pin is-editable",
-    html: `<span style="--pin-color:${color}" aria-hidden="true">${label}</span>`,
-    iconSize: [42, 44],
-    iconAnchor: [21, 44],
-    popupAnchor: [0, -38],
+    className: `yaana-place-pin is-${kind}`,
+    html: `<span class="place-pin-art" style="--pin-color:${color};--pin-shift:${shift}px" aria-hidden="true">
+      <span class="place-pin-stem" style="width:${Math.hypot(shift, stemY)}px;rotate:${Math.atan2(stemY, shift)}rad"></span>
+      <span class="place-pin-dot"></span>
+      <span class="place-pin-face">${symbols.map((symbol) => `<span>${symbol}</span>`).join("")}</span>
+    </span>`,
+    iconSize: meeting ? [28, 40] : [42, 54],
+    iconAnchor: meeting ? [14, 2] : [21, 52],
+    popupAnchor: meeting ? [0, -4] : [shift, -49],
   });
 }
 
-const editPickupIcon = editPin("#a64437", "A");
-const editDropIcon = editPin("#246781", "B");
+const destinationIcon = placePin("destination", [DESTINATION_SYMBOL], "#246781");
+const meetingIcon = placePin("meeting", [MEETING_SYMBOL], SHARED_COLOR);
 const NO_STOPS = [];
 const NO_LISTINGS = [];
+
+function endpointShift(endpoints, map, zoom) {
+  if (endpoints.length !== 2) return 0;
+  const [first, second] = endpoints.map(({ position }) => map.project(position, zoom));
+  const difference = second.subtract(first);
+  if (Math.abs(difference.y) >= 38 || Math.abs(difference.x) >= 46) return 0;
+  return (difference.x < 0 ? 1 : -1) * (46 - Math.abs(difference.x)) / 2;
+}
+
+function MatchPlacePins({ comparison, characters }) {
+  const map = useMap();
+  const [zoom, setZoom] = useState(() => map.getZoom());
+  useMapEvent("zoomend", () => setZoom(map.getZoom()));
+
+  const pinGroups = [
+    { kind: "pickup", endpoints: comparison.pickups },
+    { kind: "destination", endpoints: comparison.destinations },
+  ];
+
+  return (
+    <>
+      {pinGroups.flatMap(({ kind, endpoints }) => {
+        const firstShift = endpointShift(endpoints, map, zoom);
+        return endpoints.map(({ position, riders }, index) => {
+          const both = riders.length > 1;
+          const title = both
+            ? `Same ${kind} for both trips`
+            : `${riders[0].owner === "own" ? "Your" : "Classmate’s"} ${kind}`;
+          const color = both ? SHARED_COLOR : riders[0].owner === "own" ? OWN_COLOR : PEER_COLOR;
+          const symbols = kind === "pickup"
+            ? riders.map(({ owner }) => pickupCharacter(characters?.[owner]).symbol)
+            : [DESTINATION_SYMBOL];
+          return (
+            <Marker
+              key={`${kind}-${position.join(",")}`}
+              position={position}
+              icon={placePin(kind, symbols, color, index === 0 ? firstShift : -firstShift)}
+              title={title}
+            >
+              <Popup>
+                <strong>{title}</strong>
+                {riders.map(({ owner, place }) => (
+                  <p key={owner}>{owner === "own" ? "You" : "Classmate"} · {place || "Pinned location"}</p>
+                ))}
+              </Popup>
+            </Marker>
+          );
+        });
+      })}
+      {comparison.pickup && (
+        <Marker position={comparison.pickup.position} icon={meetingIcon} title="Proposed pickup">
+          <Popup>
+            <strong>Proposed pickup</strong>
+            <p>{comparison.pickup.label}</p>
+          </Popup>
+        </Marker>
+      )}
+    </>
+  );
+}
 
 function tripPin(seats, selected) {
   const count = Math.max(0, Number(seats) || 0);
@@ -81,7 +150,7 @@ function ResizeSync() {
   return null;
 }
 
-function ViewSync({ pointKey, points, reduce, mapRef }) {
+function ViewSync({ pointKey, points, padding, reduce, mapRef }) {
   const map = useMap();
   const previousKey = useRef();
   useEffect(() => {
@@ -98,8 +167,8 @@ function ViewSync({ pointKey, points, reduce, mapRef }) {
       map.setView(points[0], 15, { animate: !reduce });
       return;
     }
-    map.fitBounds(points, { padding: [36, 36], maxZoom: 16, animate: !reduce });
-  }, [map, pointKey, points, reduce]);
+    map.fitBounds(points, { padding, maxZoom: 16, animate: !reduce });
+  }, [map, pointKey, points, padding, reduce]);
   return null;
 }
 
@@ -174,6 +243,8 @@ export default function TravelMap({
   emptyHint,
   quiet = false,
   comparison,
+  comparisonCharacters,
+  originCharacter,
 }) {
   const reduce = useReducedMotion();
   const mapRef = useRef(null);
@@ -196,15 +267,17 @@ export default function TravelMap({
         for (const point of comparison[key]) points.push(point);
       }
     }
+    for (const { position } of [...comparison.pickups, ...comparison.destinations]) points.push(position);
     if (comparison.pickup) points.push(comparison.pickup.position);
   }
   const pointKey = points.map((point) => `${point[0].toFixed(5)},${point[1].toFixed(5)}`).join("|");
+  const padding = comparison || onMovePin ? [50, 56] : [36, 36];
 
   function fit() {
     const map = mapRef.current;
     if (!map || points.length < 1) return;
     if (points.length === 1) map.setView(points[0], 15, { animate: !reduce });
-    else map.fitBounds(points, { padding: [36, 36], maxZoom: 16, animate: !reduce });
+    else map.fitBounds(points, { padding, maxZoom: 16, animate: !reduce });
   }
 
   function pickCenter() {
@@ -246,7 +319,7 @@ export default function TravelMap({
         />
         {quiet ? null : <ScaleControl imperial={false} />}
         <ResizeSync />
-        <ViewSync pointKey={fitKey ?? pointKey} points={points} reduce={reduce} mapRef={mapRef} />
+        <ViewSync pointKey={fitKey ?? pointKey} points={points} padding={padding} reduce={reduce} mapRef={mapRef} />
         {canPick && onPick ? <ClickLayer onPick={onPick} /> : null}
         {displayRoute.length > 1 && (
           <>
@@ -280,18 +353,11 @@ export default function TravelMap({
             />
           )
         ))}
-        {comparison?.pickup && (
-          <Marker position={comparison.pickup.position} icon={matchPickupIcon} title="Proposed pickup">
-            <Popup>
-              <strong>Proposed pickup</strong>
-              <p>{comparison.pickup.label}</p>
-            </Popup>
-          </Marker>
-        )}
+        {comparison && <MatchPlacePins comparison={comparison} characters={comparisonCharacters} />}
         {displayOrigin && (
           <Marker
             position={displayOrigin}
-            icon={onMovePin ? editPickupIcon : pickupIcon}
+            icon={placePin("pickup", [pickupCharacter(originCharacter).symbol], "#a64437")}
             title="Pickup pin"
             draggable={Boolean(onMovePin)}
             eventHandlers={onMovePin ? { dragend: (event) => movePin("pickup", event) } : undefined}
@@ -305,7 +371,7 @@ export default function TravelMap({
         {displayDrop && (
           <Marker
             position={displayDrop}
-            icon={onMovePin ? editDropIcon : dropIcon}
+            icon={destinationIcon}
             title="Destination pin"
             draggable={Boolean(onMovePin)}
             eventHandlers={onMovePin ? { dragend: (event) => movePin("destination", event) } : undefined}
@@ -374,6 +440,9 @@ export default function TravelMap({
                 {label}
               </li>
             ))}
+            {comparison.pickups.length > 0 && <li><b aria-hidden="true">{pickupCharacter().symbol}</b> Original pickup</li>}
+            {comparison.destinations.length > 0 && <li><b aria-hidden="true">{DESTINATION_SYMBOL}</b> Destination</li>}
+            {comparison.pickup && <li><b aria-hidden="true" className="match-legend-meeting">{MEETING_SYMBOL}</b> Proposed pickup</li>}
           </ul>
           <button className="map-fit" type="button" onClick={fit}>Fit routes</button>
         </div>
@@ -418,8 +487,8 @@ export default function TravelMap({
 
       {!quiet && (
       <ul className="map-legend" aria-label="Map legend">
-        <li><i className="map-swatch map-swatch-a" /> Pickup</li>
-        <li><i className="map-swatch map-swatch-b" /> Destination</li>
+        <li><b aria-hidden="true">{pickupCharacter(originCharacter).symbol}</b> Pickup</li>
+        <li><b aria-hidden="true">{DESTINATION_SYMBOL}</b> Destination</li>
         <li><i className="map-swatch map-swatch-route" /> Driving route</li>
         {displayStops.length > 0 && <li><i className="map-swatch map-swatch-stop" /> Shared stop</li>}
         {listingCount > 0 && <li><i className="map-swatch map-swatch-trip" /> Trip pickup · open seats</li>}

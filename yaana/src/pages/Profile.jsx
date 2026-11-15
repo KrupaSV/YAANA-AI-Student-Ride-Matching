@@ -3,6 +3,7 @@ import { supabase, friendlyError, fmtDate, initials } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { isTestingRegistration, validateName } from "../lib/validation";
 import { TRANSPORT_MODES } from "../lib/matching";
+import { PICKUP_CHARACTERS, pickupCharacter } from "../lib/mapCharacters";
 import { useTitle } from "../lib/useTitle";
 import PageBanner from "../components/PageBanner";
 
@@ -15,7 +16,7 @@ const labels = {
 export default function Profile() {
   useTitle("Profile");
   const { user, profile, refreshProfile, schemaReady } = useAuth();
-  const [form, setForm] = useState({ name: "", department: "", transport: "Auto", detour: 5, departure: "" });
+  const [form, setForm] = useState({ name: "", department: "", transport: "Auto", detour: 5, departure: "", character: "neutral" });
   const [history, setHistory] = useState([]);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -29,6 +30,7 @@ export default function Profile() {
       transport: profile.transport_preference || "Auto",
       detour: profile.max_detour_km || 5,
       departure: profile.preferred_departure || "",
+      character: pickupCharacter(profile.pickup_character).value,
     });
   }, [profile]);
 
@@ -66,6 +68,7 @@ export default function Profile() {
       max_detour_km: detour,
     };
     if (schemaReady) payload.preferred_departure = form.departure.trim() || null;
+    if (profile?.pickup_character != null) payload.pickup_character = form.character;
     const { error: updateError } = await supabase.from("profiles").update(payload).eq("id", user.id);
     setSaving(false);
     if (updateError) setError(friendlyError(updateError));
@@ -137,6 +140,17 @@ export default function Profile() {
             <label className="field">
               <span>Preferred departure note</span>
               <input value={form.departure} placeholder="Weekday mornings" onChange={(event) => setForm({ ...form, departure: event.target.value })} />
+            </label>
+          )}
+          {profile?.pickup_character != null && (
+            <label className="field">
+              <span>Pickup character</span>
+              <select value={form.character} onChange={(event) => setForm({ ...form, character: event.target.value })}>
+                {PICKUP_CHARACTERS.map(({ value, label, symbol }) => (
+                  <option key={value} value={value}>{symbol} {label}</option>
+                ))}
+              </select>
+              <small className="field-note">This character marks your pickup on your classmate’s match map.</small>
             </label>
           )}
           <p className="muted">Account created {user?.created_at ? new Date(user.created_at).toLocaleDateString() : "date unavailable"}.</p>

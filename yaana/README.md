@@ -108,6 +108,8 @@ Place search uses bundled OpenStreetMap data and does not call a remote geocoder
 
 Use a Supabase demo project with the YAANA schema applied and registration mode already set to `testing`. Seed logins belong to fictional students and can read other open rides in that project, so use a database reserved for test data.
 
+Apply `supabase/migrations/20261115191500_pickup_characters.sql` after the trip matches migration to enable the pickup character selector in Profile. The demo accounts use distinct characters when this migration is present.
+
 Start the map API, then preview the route geometry from the app directory.
 
 ```powershell

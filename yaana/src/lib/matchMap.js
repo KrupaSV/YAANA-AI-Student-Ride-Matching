@@ -112,6 +112,19 @@ function proposePickup(stretches, own, peer) {
   return null;
 }
 
+function tripEndpoints(own, peer, field) {
+  const endpoints = [];
+  for (const [owner, trip] of [["own", own], ["peer", peer]]) {
+    const position = location(trip?.[`${field}_lat`], trip?.[`${field}_lng`]);
+    if (!position) continue;
+    const rider = { owner, place: trip[`${field}_name`] };
+    const same = endpoints.find((endpoint) => endpoint.position.every((coord, index) => coord === position[index]));
+    if (same) same.riders.push(rider);
+    else endpoints.push({ position, riders: [rider] });
+  }
+  return endpoints;
+}
+
 export function compareMatchRoutes(own, peer) {
   const ownRoute = savedRoute(own);
   const peerRoute = savedRoute(peer);
@@ -123,6 +136,8 @@ export function compareMatchRoutes(own, peer) {
   return {
     ownRoute,
     peerRoute,
+    pickups: tripEndpoints(own, peer, "origin"),
+    destinations: tripEndpoints(own, peer, "destination"),
     shared: stretches.map(({ points }) => points),
     sharedMeters: stretches.reduce((total, { meters }) => total + meters, 0),
     pickup: peerFirst ? proposePickup(stretches, peer, own) : proposePickup(stretches, own, peer),

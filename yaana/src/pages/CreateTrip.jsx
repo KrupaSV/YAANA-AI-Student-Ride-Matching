@@ -4,6 +4,7 @@ import { supabase, friendlyError } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
 import { fetchRoute, reversePlace } from "../lib/api";
 import { TRANSPORT_MODES } from "../lib/matching";
+import { DESTINATION_SYMBOL, pickupCharacter } from "../lib/mapCharacters";
 import { loadOpenStudentTrips, syncMatchesForTrip } from "../lib/syncMatches";
 import { useTitle } from "../lib/useTitle";
 import MapPicker from "../components/MapPicker";
@@ -11,8 +12,8 @@ import LocationSearch from "../components/LocationSearch";
 import PageBanner from "../components/PageBanner";
 
 const pinOptions = [
-  { target: "pickup", letter: "A", label: "Pickup" },
-  { target: "destination", letter: "B", label: "Destination" },
+  { target: "pickup", label: "Pickup" },
+  { target: "destination", label: "Destination" },
 ];
 
 export default function CreateTrip() {
@@ -201,7 +202,7 @@ export default function CreateTrip() {
         </div>
         <section className="trip-map" aria-label="Place trip pins">
           <div className="pin-tools" role="group" aria-label="Choose a pin to place">
-            {pinOptions.map(({ target, letter, label }) => {
+            {pinOptions.map(({ target, label }) => {
               const placed = target === "pickup" ? origin : destination;
               return (
                 <button
@@ -211,7 +212,9 @@ export default function CreateTrip() {
                   aria-pressed={pinTarget === target}
                   onClick={() => setPinTarget((current) => current === target ? null : target)}
                 >
-                  <span className="pin-tool-mark" aria-hidden="true">{letter}</span>
+                  <span className="pin-tool-mark" aria-hidden="true">
+                    {target === "pickup" ? pickupCharacter(profile?.pickup_character).symbol : DESTINATION_SYMBOL}
+                  </span>
                   <span>{label}<small>{placed ? "Pin set" : "No pin yet"}</small></span>
                 </button>
               );
@@ -226,6 +229,7 @@ export default function CreateTrip() {
           </p>
           <MapPicker
             origin={origin}
+            originCharacter={profile?.pickup_character}
             destination={destination}
             route={currentRoute?.geometry}
             fitKey={fitKey}

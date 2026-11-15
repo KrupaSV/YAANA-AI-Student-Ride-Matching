@@ -23,7 +23,10 @@ async function readProfile(userId) {
     return { profile: base.data, schemaReady: false, schemaGap: "init" };
   }
 
-  const extra = await supabase.from("profiles").select("theme, preferred_departure").eq("id", userId).maybeSingle();
+  let extra = await supabase.from("profiles").select("theme, preferred_departure, pickup_character").eq("id", userId).maybeSingle();
+  if (extra.error?.code === "42703") {
+    extra = await supabase.from("profiles").select("theme, preferred_departure").eq("id", userId).maybeSingle();
+  }
   if (extra.error) return { profile: core.data, schemaReady: false, schemaGap: "theme" };
   const matches = await supabase.from("trip_matches").select("id").limit(1);
   if (matches.error && /trip_matches|schema cache|does not exist|could not find the table/i.test(matches.error.message || "")) {

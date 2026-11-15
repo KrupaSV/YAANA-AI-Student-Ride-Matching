@@ -29,7 +29,7 @@ const STATUS_COPY = {
 
 export default function Matches() {
   useTitle("Matches");
-  const { user, verified } = useAuth();
+  const { user, profile, verified } = useAuth();
   const toast = useToast();
   const location = useLocation();
   const [rows, setRows] = useState([]);
@@ -212,7 +212,14 @@ export default function Matches() {
               );
             })}
           </div>
-          <MatchPreview match={selected} mine={selectedMine} peer={selectedPeer} userId={user.id} titleRef={previewTitle} />
+          <MatchPreview
+            match={selected}
+            mine={selectedMine}
+            peer={selectedPeer}
+            userId={user.id}
+            ownCharacter={profile?.pickup_character}
+            titleRef={previewTitle}
+          />
         </div>
       )}
       <p className="form-switch"><Link to="/find-rides">Browse all open trips</Link></p>
@@ -225,12 +232,24 @@ function PeerAvatar({ name, src }) {
   return <span className="avatar" aria-hidden="true">{initials(name)}</span>;
 }
 
-function MatchPreview({ match, mine, peer, userId, titleRef }) {
+function MatchPreview({ match, mine, peer, userId, ownCharacter, titleRef }) {
   const theirTrip = peer?.trip;
   const comparison = useMemo(() => compareMatchRoutes(mine, theirTrip), [mine, theirTrip]);
+  const matchId = match?.ephemeral ? null : match?.id;
+  const [character, setCharacter] = useState(null);
+
+  useEffect(() => {
+    if (!matchId) return;
+    let active = true;
+    supabase.rpc("match_pickup_character", { p_match_id: matchId }).then(({ data }) => {
+      if (active) setCharacter({ matchId, value: data });
+    });
+    return () => { active = false; };
+  }, [matchId]);
+
   if (!match) return null;
 
-  const { ownRoute, peerRoute, sharedMeters, pickup } = comparison;
+  const { ownRoute, peerRoute, sharedMeters, pickup, pickups, destinations } = comparison;
   const hasBothRoutes = ownRoute.length > 0 && peerRoute.length > 0;
   const hasRoute = ownRoute.length > 0 || peerRoute.length > 0;
   const timeGap = match.time_difference_min ?? (
@@ -277,7 +296,14 @@ function MatchPreview({ match, mine, peer, userId, titleRef }) {
                 ? `${ownRoute.length ? "Your classmate’s route is" : "Your route is"} unavailable to compare.`
                 : "Neither trip has a saved road route."}
         </figcaption>
-        {hasRoute && <TravelMap key={match.id} comparison={comparison} quiet />}
+        {(hasRoute || pickups.length > 0 || destinations.length > 0) && (
+          <TravelMap
+            key={match.id}
+            comparison={comparison}
+            comparisonCharacters={{ own: ownCharacter, peer: character?.matchId === matchId ? character?.value : undefined }}
+            quiet
+          />
+        )}
       </figure>
       <details className="match-more">
         <summary>Trip and compatibility details</summary>

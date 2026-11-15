@@ -65,3 +65,22 @@ test("old or incomplete geometry cannot produce a false shared stretch", () => {
     assert.equal(result.pickup, null);
   }
 });
+
+test("markers keep the published coordinates when nearby pickups differ", () => {
+  const first = { ...trip("a", route), origin_lat: 12.90003, destination_lat: 12.91, destination_lng: 77.61 };
+  const second = { ...first, id: "b", origin_lat: 12.90006, origin_name: "Bus stop" };
+  const result = compareMatchRoutes(first, second);
+  assert.deepEqual(result.pickups.map(({ position }) => position), [[12.90003, 77.6], [12.90006, 77.6]]);
+  assert.equal(result.pickups[1].riders[0].place, "Bus stop");
+  assert.deepEqual(result.destinations[0].riders.map(({ owner }) => owner), ["own", "peer"]);
+});
+
+test("matching exact pickups stacks both characters on one point even without a road route", () => {
+  const first = { id: "a", origin_lat: "12.9", origin_lng: "77.6", origin_name: "Landmark" };
+  const result = compareMatchRoutes(first, { ...first, id: "b", origin_lat: 12.9 });
+  assert.deepEqual(result.pickups, [{
+    position: [12.9, 77.6],
+    riders: [{ owner: "own", place: "Landmark" }, { owner: "peer", place: "Landmark" }],
+  }]);
+  assert.deepEqual(result.destinations, []);
+});

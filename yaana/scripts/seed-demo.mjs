@@ -3,9 +3,9 @@ import { readFile, writeFile } from "node:fs/promises";
 import { createClient } from "@supabase/supabase-js";
 
 const accounts = {
-  asha: { email: "yaana-demo-asha@example.com", name: "YAANA Demo Asha" },
-  neha: { email: "yaana-demo-neha@example.com", name: "YAANA Demo Neha" },
-  ravi: { email: "yaana-demo-ravi@example.com", name: "YAANA Demo Ravi" },
+  asha: { email: "yaana-demo-asha@example.com", name: "YAANA Demo Asha", pickupCharacter: "woman" },
+  neha: { email: "yaana-demo-neha@example.com", name: "YAANA Demo Neha", pickupCharacter: "woman" },
+  ravi: { email: "yaana-demo-ravi@example.com", name: "YAANA Demo Ravi", pickupCharacter: "man" },
 };
 const rides = [
   { id: "hsr-asha", owner: "asha", pickup: "HSR Layout", mode: "Cab", time: "08:10", seats: 2 },
@@ -114,6 +114,10 @@ async function demoStudent(admin, projectUrl, publishableKey, account, password)
   const { user } = readResult(`Signing in as ${account.email}`, await client.auth.signInWithPassword({
     email: account.email, password,
   }));
+  const characterUpdate = await client.from("profiles").update({ pickup_character: account.pickupCharacter }).eq("id", user.id);
+  if (!["42703", "PGRST204"].includes(characterUpdate.error?.code)) {
+    readResult("Setting the demo pickup character", characterUpdate);
+  }
   return { client, id: user.id };
 }
 
