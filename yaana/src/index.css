@@ -2379,6 +2379,7 @@ html[data-motion="reduced"] *::after {
 
 @media (min-width: 1024px) {
   .split.match-layout { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); }
+  .match-details h2 { scroll-margin-top: 24px; }
   .sidebar { width: 228px; transform: none; }
   .main-stage { margin-left: 228px; }
   .topbar, .backdrop { display: none; }

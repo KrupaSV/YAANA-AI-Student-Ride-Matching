@@ -189,7 +189,8 @@ export default function Matches() {
                       aria-controls="match-details"
                       onClick={() => {
                         setSelectedId(match.id);
-                        previewTitle.current?.focus();
+                        previewTitle.current?.focus({ preventScroll: true });
+                        previewTitle.current?.scrollIntoView({ block: "start" });
                       }}
                     >
                       Details

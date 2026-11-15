@@ -275,7 +275,8 @@ export default function TravelMap({
             <Polyline
               key={key}
               positions={comparison[key]}
-              pathOptions={{ className: `match-map-${key}`, color, weight, dashArray, interactive: false }}
+              interactive={false}
+              pathOptions={{ color, weight, dashArray }}
             />
           )
         ))}
