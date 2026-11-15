@@ -32,6 +32,12 @@ function pin(color, label) {
 const pickupIcon = pin("#e78376", "A");
 const dropIcon = pin("#397b98", "B");
 const stopIcon = pin("#386b58", "+");
+const matchPickupIcon = pin("#156146", "P");
+const MATCH_ROUTES = [
+  { key: "ownRoute", label: "Your route", color: "#195cc3", weight: 7 },
+  { key: "peerRoute", label: "Classmate’s route", color: "#b94721", weight: 5, dashArray: "9 8" },
+  { key: "shared", label: "Shared stretch", color: "#156146", weight: 5 },
+];
 function editPin(color, label) {
   return L.divIcon({
     className: "yaana-pin is-editable",
@@ -167,6 +173,7 @@ export default function TravelMap({
   onSelectListing,
   emptyHint,
   quiet = false,
+  comparison,
 }) {
   const reduce = useReducedMotion();
   const mapRef = useRef(null);
@@ -183,6 +190,14 @@ export default function TravelMap({
   const isLoading = loading;
   const missingPoints = !displayOrigin && !displayDrop && listingCount === 0;
   const points = fitPoints(displayOrigin, displayDrop, displayRoute, displayStops, listings);
+  if (comparison) {
+    for (const { key } of MATCH_ROUTES) {
+      if (key !== "shared") {
+        for (const point of comparison[key]) points.push(point);
+      }
+    }
+    if (comparison.pickup) points.push(comparison.pickup.position);
+  }
   const pointKey = points.map((point) => `${point[0].toFixed(5)},${point[1].toFixed(5)}`).join("|");
 
   function fit() {
@@ -216,7 +231,7 @@ export default function TravelMap({
       : "";
 
   return (
-    <div className={`map-frame travel-map${compact ? " is-compact" : ""}${quiet ? " is-quiet" : ""}`}>
+    <div className={`map-frame travel-map${compact ? " is-compact" : ""}${quiet ? " is-quiet" : ""}${comparison ? " is-comparison" : ""}`}>
       <MapContainer
         center={DEFAULT_CENTER}
         zoom={DEFAULT_ZOOM}
@@ -254,6 +269,23 @@ export default function TravelMap({
               </Tooltip>
             </Polyline>
           </>
+        )}
+        {comparison && MATCH_ROUTES.map(({ key, color, weight, dashArray }) => (
+          comparison[key].length > 0 && (
+            <Polyline
+              key={key}
+              positions={comparison[key]}
+              pathOptions={{ className: `match-map-${key}`, color, weight, dashArray, interactive: false }}
+            />
+          )
+        ))}
+        {comparison?.pickup && (
+          <Marker position={comparison.pickup.position} icon={matchPickupIcon} title="Proposed pickup">
+            <Popup>
+              <strong>Proposed pickup</strong>
+              <p>{comparison.pickup.label}</p>
+            </Popup>
+          </Marker>
         )}
         {displayOrigin && (
           <Marker
@@ -331,6 +363,20 @@ export default function TravelMap({
           );
         })}
       </MapContainer>
+
+      {comparison && (
+        <div className="match-map-toolbar">
+          <ul className="match-map-legend" aria-label="Route comparison legend">
+            {MATCH_ROUTES.filter(({ key }) => comparison[key].length > 0).map(({ key, label, color, dashArray }) => (
+              <li key={key}>
+                <span aria-hidden="true" className={dashArray ? "is-dashed" : undefined} style={{ borderColor: color }} />
+                {label}
+              </li>
+            ))}
+          </ul>
+          <button className="map-fit" type="button" onClick={fit}>Fit routes</button>
+        </div>
+      )}
 
       {onMovePin && (
         <>

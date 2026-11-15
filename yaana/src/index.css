@@ -2016,6 +2016,42 @@ html[data-motion="reduced"] .how-step .how-step-icon {
 .explain { display: grid; margin: 14px 0; padding: 0; grid-template-columns: 1fr; gap: 6px; list-style: none; }
 .explain li { color: var(--muted); font-size: 0.84rem; line-height: 1.55; }
 .match-head { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; min-width: 0; }
+.match-details { display: grid; gap: 14px; }
+.match-details h2 { margin: 0; font-size: 1.35rem; scroll-margin-top: 88px; }
+.match-details h2 + p { margin: 4px 0 0; font-size: 0.84rem; }
+.match-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.match-facts > div { padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.match-facts dt, .match-facts p, .match-road figcaption { color: var(--muted); font-size: 0.8rem; }
+.match-facts dd { margin: 2px 0 0; font-size: 0.95rem; font-weight: 700; }
+.match-facts .match-pickup { grid-column: 1 / -1; border-inline-start: 4px solid #268461; }
+.match-facts p { margin: 4px 0 0; }
+.match-road { display: grid; gap: 6px; margin: 0; }
+.travel-map.is-comparison .leaflet-container { height: clamp(240px, 36vw, 360px); }
+.match-map-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
+  padding: 4px 8px;
+}
+.match-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.match-map-legend li { display: flex; align-items: center; gap: 5px; }
+.match-map-legend span { width: 16px; border-top: 4px solid; }
+.match-map-legend .is-dashed { border-top-style: dashed; }
+.match-map-toolbar .map-fit { width: auto; margin: 0; }
+.match-more { font-size: 0.84rem; }
+.match-more summary { cursor: pointer; }
+.match-more .explain { margin-bottom: 0; }
 .match-rank {
   flex: 0 0 auto;
   display: inline-flex;
@@ -2342,6 +2378,7 @@ html[data-motion="reduced"] *::after {
 }
 
 @media (min-width: 1024px) {
+  .split.match-layout { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); }
   .sidebar { width: 228px; transform: none; }
   .main-stage { margin-left: 228px; }
   .topbar, .backdrop { display: none; }

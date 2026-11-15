@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { supabase, fmtDate, friendlyError, initials } from "../lib/supabase";
 import { useAuth } from "../lib/auth";
-import { openSeats } from "../lib/matching";
+import { minutesApart, openSeats } from "../lib/matching";
+import { compareMatchRoutes } from "../lib/matchMap";
 import { evaluatePair } from "../lib/autoMatch";
 import {
   loadOpenStudentTrips,
@@ -18,7 +19,7 @@ import { useToast } from "../components/Toast";
 import EmptyState from "../components/EmptyState";
 import Skeleton from "../components/Skeleton";
 import StatusLabel from "../components/StatusLabel";
-import MapPicker from "../components/MapPicker";
+import TravelMap from "../components/TravelMap";
 
 const STATUS_COPY = {
   pending: "Waiting",
@@ -39,6 +40,7 @@ export default function Matches() {
   const [status, setStatus] = useState(location.state?.published ? "Trip saved. Looking for compatible classmates…" : "");
   const [busy, setBusy] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const previewTitle = useRef(null);
 
   async function load() {
     setLoading(true);
@@ -160,7 +162,7 @@ export default function Matches() {
           action="Create a trip"
         />
       ) : (
-        <div className="split">
+        <div className="split match-layout">
           <div className="stack">
             {visible.map((match) => {
               const peer = peerFromMatch(match, user.id);
@@ -181,7 +183,17 @@ export default function Matches() {
                   <p className="muted">Their trip: {peer.trip?.origin_name} → {peer.trip?.destination_name} · {fmtDate(peer.trip?.departure_at)}</p>
                   <p className="muted">{peer.trip?.transport_mode} · {openSeats(peer.trip)} open of {peer.trip?.seats_available} · {match.time_difference_min} min apart</p>
                   <div className="row">
-                    <button className="btn btn-secondary" type="button" onClick={() => setSelectedId(match.id)}>Details</button>
+                    <button
+                      className="btn btn-secondary"
+                      type="button"
+                      aria-controls="match-details"
+                      onClick={() => {
+                        setSelectedId(match.id);
+                        previewTitle.current?.focus();
+                      }}
+                    >
+                      Details
+                    </button>
                     {match.status !== "rejected" && mineReply !== "accepted" && (
                       <button className="btn btn-primary" type="button" disabled={busy === match.id} onClick={() => respond(match, "accepted")}>
                         {busy === match.id ? "Saving…" : "Accept"}
@@ -199,7 +211,7 @@ export default function Matches() {
               );
             })}
           </div>
-          <MatchPreview match={selected} mine={selectedMine} peer={selectedPeer} userId={user.id} />
+          <MatchPreview match={selected} mine={selectedMine} peer={selectedPeer} userId={user.id} titleRef={previewTitle} />
         </div>
       )}
       <p className="form-switch"><Link to="/find-rides">Browse all open trips</Link></p>
@@ -212,51 +224,72 @@ function PeerAvatar({ name, src }) {
   return <span className="avatar" aria-hidden="true">{initials(name)}</span>;
 }
 
-function MatchPreview({ match, mine, peer, userId }) {
-  if (!match || !peer?.trip) {
-    return <p className="alert alert-info">Choose a match to see both routes.</p>;
-  }
-  const facts = mine && peer.trip ? evaluatePair(mine, peer.trip) : null;
-  const route = peer.trip.route_geometry || mine?.route_geometry || [];
+function MatchPreview({ match, mine, peer, userId, titleRef }) {
+  const theirTrip = peer?.trip;
+  const comparison = useMemo(() => compareMatchRoutes(mine, theirTrip), [mine, theirTrip]);
+  if (!match) return null;
+
+  const { ownRoute, peerRoute, sharedMeters, pickup } = comparison;
+  const hasBothRoutes = ownRoute.length > 0 && peerRoute.length > 0;
+  const hasRoute = ownRoute.length > 0 || peerRoute.length > 0;
+  const timeGap = match.time_difference_min ?? (
+    mine?.departure_at && theirTrip?.departure_at
+      ? minutesApart(mine.departure_at, theirTrip.departure_at)
+      : null
+  );
+  const roadOverlap = match.overlap_pct ?? (
+    mine && theirTrip ? evaluatePair(mine, theirTrip).overlapPct : null
+  );
+  const sharedDistance = sharedMeters < 1000
+    ? `${Math.round(sharedMeters / 10) * 10} m`
+    : `${(sharedMeters / 1000).toFixed(1)} km`;
+
   return (
-    <div className="stack">
-      <article className="trip-card">
-        <p className="eyebrow">Shared ride</p>
-        <div className="match-head">
-          <PeerAvatar name={peer.name} src={peer.avatarUrl} />
-          <div>
-            <strong>{peer.name || "Classmate"}</strong>
-            <p className="muted">Compatibility {match.score} / 100</p>
-          </div>
+    <article className="trip-card match-details" id="match-details" aria-labelledby="match-details-title">
+      <div>
+        <h2 id="match-details-title" ref={titleRef} tabIndex={-1}>Why this match?</h2>
+        <p className="muted">{peer?.name || "Classmate"} · {match.score}% compatible</p>
+      </div>
+      <dl className="match-facts">
+        <div>
+          <dt>Departure gap</dt>
+          <dd>{Number.isFinite(timeGap) ? (timeGap === 0 ? "Same departure time" : `${Math.round(timeGap)} min apart`) : "Unavailable"}</dd>
         </div>
+        <div>
+          <dt>Open seats on their trip</dt>
+          <dd>{theirTrip?.seats_available == null ? "Unavailable" : `${openSeats(theirTrip)} of ${theirTrip.seats_available}`}</dd>
+        </div>
+        <div className="match-pickup">
+          <dt>Proposed pickup</dt>
+          <dd>{pickup?.label || "No pickup suggested"}</dd>
+          {pickup && <p>Confirm the exact meeting spot together before travelling.</p>}
+          {!pickup && sharedMeters > 0 && <p>The shared stretch starts too far from one or both listed pickups.</p>}
+        </div>
+      </dl>
+      <figure className="match-road">
+        <figcaption>
+          {sharedMeters > 0
+            ? `About ${sharedDistance} of shared road in the same direction.`
+            : hasBothRoutes
+              ? "No clear same-direction stretch on these saved routes."
+              : hasRoute
+                ? `${ownRoute.length ? "Your classmate’s route is" : "Your route is"} unavailable to compare.`
+                : "Neither trip has a saved road route."}
+        </figcaption>
+        {hasRoute && <TravelMap key={match.id} comparison={comparison} quiet />}
+      </figure>
+      <details className="match-more">
+        <summary>Trip and compatibility details</summary>
         <ul className="explain">
-          <li>Pickup: {peer.trip.origin_name}</li>
-          <li>Destination: {peer.trip.destination_name}</li>
-          <li>Departure: {fmtDate(peer.trip.departure_at)}</li>
-          <li>Transport: {peer.trip.transport_mode}</li>
-          <li>Open seats: {openSeats(peer.trip)} of {peer.trip.seats_available}</li>
-          <li>Pickup gap: {match.pickup_km == null ? "not stored" : `${match.pickup_km} km`}</li>
-          <li>Destination gap: {match.destination_km == null ? "not stored" : `${match.destination_km} km`}</li>
-          <li>Road overlap: {match.overlap_pct == null ? (facts?.overlapPct == null ? "unavailable" : `${facts.overlapPct}%`) : `${match.overlap_pct}%`}</li>
+          {mine && <li>Your departure: {fmtDate(mine.departure_at)}</li>}
+          {theirTrip && <li>Their departure: {fmtDate(theirTrip.departure_at)} · {theirTrip.transport_mode}</li>}
+          <li>Pickup gap: {match.pickup_km == null ? "unavailable" : `${match.pickup_km} km`}</li>
+          <li>Destination gap: {match.destination_km == null ? "unavailable" : `${match.destination_km} km`}</li>
+          <li>Road overlap used for the compatibility score: {roadOverlap == null ? "unavailable" : `${roadOverlap}%`}</li>
           <li>Your reply: {myResponse(match, userId)}. Their reply: {theirResponse(match, userId)}.</li>
         </ul>
-      </article>
-      {route.length > 1 ? (
-        <MapPicker
-          key={match.id}
-          origin={[peer.trip.origin_lat, peer.trip.origin_lng]}
-          destination={[peer.trip.destination_lat, peer.trip.destination_lng]}
-          originLabel={peer.trip.origin_name}
-          destinationLabel={peer.trip.destination_name}
-          route={route}
-          distanceKm={peer.trip.distance_km}
-          durationMin={peer.trip.duration_min}
-          transportMode={peer.trip.transport_mode}
-        />
-      ) : (
-        <p className="alert alert-info">No saved road geometry for this match yet.</p>
-      )}
-    </div>
+      </details>
+    </article>
   );
 }
 
