@@ -6,7 +6,7 @@ Each entry stores its OpenStreetMap ID, name, alternate names when available, pl
 
 ## Use in the app
 
-`GET /geo/search?q=...` ranks exact names and aliases first and accepts partial words. This includes Kannada names where the OSM entry has one. The [local aliases](local_aliases.json) map common terms to existing OSM records. **DSU Main Campus** resolves to the mapped campus in Harohalli. **DSU City Campus area** points to the named Kudlu Gate Metro Station as a nearby landmark. The campus areas are based on [DSU’s postal addresses](https://www.dsu.edu.in/contact-us/postal-address).
+`GET /geo/search?q=...` ranks exact names and aliases first and accepts partial words. This includes Kannada names where the OSM entry has one. The [local aliases](local_aliases.json) map common terms to existing OSM records. **DSU Main Campus** resolves to the mapped campus in Harohalli. **DSU City Innovation Campus, Kudlu Gate** uses a separate [campus record](campus_places.json) at Sagar IT Park, based on [DSU’s directions](https://www.dsu.edu.in/contact-us/maps-direction) and [campus geotags](https://www.dsu.edu.in/images/naac/Aqar_2023_24/Criterion4/4_3_1_Geotagged_Photos.pdf). It represents a point on campus. Search for **Kudlu Gate Metro** to select the station.
 
 `GET /geo/reverse` can name a landmark within 120 metres of a pin while keeping the exact coordinates. It returns a coordinate label if no landmark is close. An area such as a university or park may be represented by its centre. Use a pin to specify a gate or entrance.
 

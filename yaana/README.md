@@ -20,7 +20,7 @@ python -m pip install -r requirements.txt
 python -m uvicorn ml_api:app --reload --port 8000
 ```
 
-The API searches a bundled [Bengaluru place catalog](geodata/README.md) and uses OSRM for road routes and detours. Search for **DSU Main Campus**, **Kudlu Gate Metro**, **HSR Layout**, or **Majestic Bus Stand** to try it. Keep the `geodata` directory in the backend deployment alongside `ml_api.py`.
+The API searches a bundled [Bengaluru place catalog](geodata/README.md) and uses OSRM for road routes and detours. Search for **DSU Main Campus**, **DSU Innovation Campus, Kudlu Gate**, **Kudlu Gate Metro**, or **HSR Layout** to try it. Keep the `geodata` directory in the backend deployment alongside `ml_api.py`.
 
 Run the map tests from this directory with `python -m pytest geodata/tests -q`.
 

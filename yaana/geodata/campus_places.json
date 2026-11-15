@@ -1,0 +1,20 @@
+[
+  {
+    "id": "dsu-city-innovation-campus",
+    "name": "DSU City Innovation Campus, Kudlu Gate",
+    "aliases": [
+      "DSU Innovation Campus, Kudlu Gate",
+      "DSU Innovation Campus",
+      "DSU City Campus",
+      "DSU City Campus area",
+      "DSU Kudlu Gate",
+      "Dayananda Sagar University City Innovation Campus",
+      "DSU Sagar IT Park"
+    ],
+    "kind": "University",
+    "locality": "Hosur Road, Singasandra",
+    "lat": 12.88757,
+    "lng": 77.64217,
+    "source_url": "https://www.dsu.edu.in/images/naac/Aqar_2023_24/Criterion4/4_3_1_Geotagged_Photos.pdf"
+  }
+]

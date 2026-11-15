@@ -5,6 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from functools import lru_cache
 import gzip
+from itertools import chain
 import json
 from math import cos, floor, radians
 from pathlib import Path
@@ -14,8 +15,9 @@ import unicodedata
 DATA_DIR = Path(__file__).resolve().parent
 CATALOG_PATH = DATA_DIR / "bengaluru_places.json.gz"
 ALIASES_PATH = DATA_DIR / "local_aliases.json"
+CAMPUS_PLACES_PATH = DATA_DIR / "campus_places.json"
 ATTRIBUTION = "© OpenStreetMap contributors"
-SOURCE = "Bengaluru place catalog / OpenStreetMap"
+SOURCE = "YAANA Bengaluru place catalog"
 
 KIND_RANK = {
     "Airport": 0, "University": 1, "Locality": 2, "Metro station": 3, "Railway station": 3,
@@ -49,6 +51,7 @@ class Place:
     lng: float
     names: tuple[str, ...]
     curated: bool
+    source_url: str | None
 
     def result(self):
         return {
@@ -58,6 +61,7 @@ class Place:
             "locality": self.locality,
             "lat": self.lat,
             "lng": self.lng,
+            **({"source_url": self.source_url} if self.source_url else {}),
         }
 
 
@@ -72,12 +76,12 @@ def rank_name(name, query, tokens):
 
 
 class PlaceCatalog:
-    def __init__(self, catalog, overrides):
+    def __init__(self, catalog, overrides, campus_places):
         self.source_timestamp = catalog["source_timestamp"]
         self.places = []
         self.by_token = defaultdict(set)
         self.by_cell = defaultdict(list)
-        for row in catalog["places"]:
+        for row in chain(catalog["places"], campus_places):
             override = overrides.get(row["id"], {})
             name = override.get("label", row["name"])
             search_names = [name, row["name"], *row["aliases"], *override.get("aliases", [])]
@@ -86,9 +90,10 @@ class PlaceCatalog:
             if row["locality"]:
                 search_names.append(f'{row["name"]} {row["locality"]}')
             names = tuple(dict.fromkeys(map(normalize, search_names)))
+            source_url = row.get("source_url")
             place = Place(
                 row["id"], name, row["kind"], row["locality"], row["lat"], row["lng"],
-                names, bool(override),
+                names, bool(override or source_url), source_url,
             )
             index = len(self.places)
             self.places.append(place)
@@ -145,4 +150,6 @@ def load_catalog():
         catalog = json.load(stream)
     with ALIASES_PATH.open(encoding="utf-8") as stream:
         overrides = json.load(stream)
-    return PlaceCatalog(catalog, overrides)
+    with CAMPUS_PLACES_PATH.open(encoding="utf-8") as stream:
+        campus_places = json.load(stream)
+    return PlaceCatalog(catalog, overrides, campus_places)

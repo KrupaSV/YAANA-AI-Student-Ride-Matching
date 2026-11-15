@@ -32,6 +32,8 @@ def test_catalog_has_unique_local_records_and_valid_alias_targets():
     ("dsu main cam", "Dayananda Sagar University, Harohalli"),
     ("HSR Lay", "HSR Layout"),
     ("Kudlu Gate Metro", "Kudlu Gate Metro Station"),
+    ("dsu innovation campus, kudlu gate", "DSU City Innovation Campus, Kudlu Gate"),
+    ("DSU City Campus", "DSU City Innovation Campus, Kudlu Gate"),
     ("Majestic Bus Stand", "Kempegowda Bus Station"),
     ("ಬೆಂಗಳೂರು", "Bengaluru"),
 ])
@@ -51,6 +53,18 @@ def test_local_search_ranks_bengaluru_places_without_network(monkeypatch, query,
 def test_search_unknown_place_and_input_validation():
     assert client.get("/geo/search", params={"q": "qzxxy unknown block"}).json()["results"] == []
     assert client.get("/geo/search", params={"q": "x"}).status_code == 422
+
+
+def test_city_campus_uses_its_own_pin_near_sagar_it_park():
+    catalog = load_catalog()
+    campus = catalog.search("DSU Kudlu Gate")[0]
+    metro = catalog.search("Kudlu Gate Metro")[0]
+    assert campus["id"] == "dsu-city-innovation-campus"
+    assert campus["kind"] == "University"
+    assert 12.887 <= campus["lat"] <= 12.888
+    assert 77.641 <= campus["lng"] <= 77.643
+    assert abs(campus["lng"] - metro["lng"]) > 0.002
+    assert catalog.nearby(campus["lat"], campus["lng"]).id == campus["id"]
 
 
 def test_reverse_uses_nearby_landmark_without_moving_pin():
